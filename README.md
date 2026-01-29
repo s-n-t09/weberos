@@ -1,7 +1,7 @@
 <div align="center">
   <br />
   <a href="https://github.com/s-n-t09/weberos">
-    <img src="/logo.png" alt="WeberOS Logo" width="120" height="120">
+    <img src="/logo.png" alt="WeberOS Logo" width="125" height="125">
   </a>
   <h1 align="center">WeberOS</h1>
 
