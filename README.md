@@ -128,7 +128,7 @@ npm run preview
 | **Coder** | 📝 | Code editor supporting text and `.wbr` files. |
 | **Settings** | ⚙️ | System configuration (Wallpaper, Profiles, Weather). |
 | **Market** | 🛍️ | App store to discover and install new packages. |
-| **WeListen** | 🎵 | Music player with visualization and playlist support. |
+| **WePlayer** | 🎬 | Video and Music player with simple style and timestamp control. |
 | **WePic** | 🖼️ | Image viewer for standard image formats. |
 | **Snake** | 🐍 | Classic Snake game. |
 | **Calco** | 🧮 | Basic arithmetic calculator. |
