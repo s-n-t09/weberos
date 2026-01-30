@@ -42,7 +42,7 @@ export const DEFAULT_FS: FileSystemNode = {
   }
 };
 
-export const DEFAULT_APPS = ['explorer', 'terminal', 'coder', 'snake', 'calco', 'weather', 'settings', 'market', 'helper', 'wepic', 'welisten'];
+export const DEFAULT_APPS = ['explorer', 'terminal', 'coder', 'snake', 'calco', 'weather', 'settings', 'market', 'helper', 'wepic', 'weplayer'];
 
 export const WALLPAPERS = [
   "https://images.unsplash.com/photo-1477346611705-65d1883cee1e?auto=format&fit=crop&q=80&w=2070",
@@ -71,7 +71,11 @@ export const FILE_ASSOCIATIONS: Record<string, string[]> = {
     'jpg': ['wepic'],
     'jpeg': ['wepic'],
     'gif': ['wepic'],
-    'mp3': ['welisten'],
-    'wav': ['welisten'],
-    'ogg': ['welisten']
+    'mp3': ['weplayer'],
+    'wav': ['weplayer'],
+    'ogg': ['weplayer'],
+    'mp4': ['weplayer'],
+    'webm': ['weplayer'],
+    'mkv': ['weplayer'],
+    'mov': ['weplayer']
 };
