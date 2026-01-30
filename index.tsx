@@ -27,7 +27,8 @@ import {
     Battery, 
     VolumeX, 
     Volume1, 
-    Volume2 
+    Volume2,
+    Film
 } from 'lucide-react';
 
 import { UserProfile, WindowState, FileSystemNode } from './types';
@@ -43,7 +44,7 @@ import { SettingsApp } from './apps/SettingsApp';
 import { MarketApp } from './apps/MarketApp';
 import { HelperApp } from './apps/HelperApp';
 import { WePicApp } from './apps/WePicApp';
-import { WelistenApp } from './apps/WeListenApp';
+import { WePlayerApp } from './apps/WePlayerApp';
 import { SnakeApp, CalcoApp, WeatherApp, DynamicAppRuntime } from './apps/MiscApps';
 
 // Registry
@@ -58,7 +59,7 @@ const SYSTEM_REGISTRY: Record<string, { name: string, icon: any, color: string }
   'market': { name: 'Market', icon: Download, color: 'bg-blue-600' },
   'helper': { name: 'Helper', icon: HelpCircle, color: 'bg-purple-500' },
   'wepic': { name: 'WePic', icon: ImageIcon, color: 'bg-pink-500' },
-  'welisten': { name: 'Welisten', icon: Music, color: 'bg-rose-500' },
+  'weplayer': { name: 'WePlayer', icon: Film, color: 'bg-rose-600' },
 };
 
 const WeberOS = () => {
@@ -194,6 +195,7 @@ const WeberOS = () => {
       const reader = new FileReader();
       const isImage = file.type.startsWith('image/');
       const isAudio = file.type.startsWith('audio/');
+      const isVideo = file.type.startsWith('video/');
       
       reader.onload = (ev) => {
           const content = ev.target?.result as string;
@@ -216,7 +218,7 @@ const WeberOS = () => {
           alert(`File uploaded to ~/uploads/${safeName}`);
       };
 
-      if (isImage || isAudio) {
+      if (isImage || isAudio || isVideo) {
           reader.readAsDataURL(file);
       } else {
           reader.readAsText(file);
@@ -251,6 +253,9 @@ const WeberOS = () => {
              return { id, name: id, icon: Package, color: 'bg-slate-500' };
          }) : [])
   ];
+
+  // SORT ALPHABETICALLY for Start Menu
+  const sortedApps = [...availableApps].sort((a, b) => a.name.localeCompare(b.name));
 
   const openApp = (appId: string, data?: any) => {
     if (appId === 'upload_files') {
@@ -381,7 +386,7 @@ const WeberOS = () => {
                           <div className="w-16 h-16 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg mb-4 overflow-hidden">
                               <img src="/logo.png" alt="WeberOS Logo" className="w-full h-full object-contain p-2" />
                           </div>
-                          <h1 className="text-2xl font-bold text-center">WeberOS v1.2</h1>
+                          <h1 className="text-2xl font-bold text-center">WeberOS v1.3</h1>
                       </div>
 
                   {!createMode && !selectedProfile && (
@@ -502,7 +507,7 @@ const WeberOS = () => {
         )}
 
         {/* Desktop Icons */}
-        {availableApps.filter(app => app.id !== 'settings' && app.id !== 'helper' && app.id !== 'wepic' && app.id !== 'welisten').map((app, index) => {
+        {availableApps.filter(app => app.id !== 'settings' && app.id !== 'helper' && app.id !== 'wepic' && app.id !== 'weplayer').map((app, index) => {
             const pos = user.settings.desktopIcons[app.id] || { x: 16, y: 16 + (index * 96) };
             
             return (
@@ -545,7 +550,7 @@ const WeberOS = () => {
             else if (win.appId === 'market') AppContent = <MarketApp user={user} setUser={setUser} />;
             else if (win.appId === 'helper') AppContent = <HelperApp />;
             else if (win.appId === 'wepic') AppContent = <WePicApp fs={fs} launchData={win.data} openFilePicker={openFilePicker} />;
-            else if (win.appId === 'welisten') AppContent = <WelistenApp fs={fs} launchData={win.data} openFilePicker={openFilePicker} volume={volume} />;
+            else if (win.appId === 'weplayer') AppContent = <WePlayerApp fs={fs} launchData={win.data} openFilePicker={openFilePicker} volume={volume} />;
             
             else if (user.customApps[win.appId]) {
                 AppContent = <DynamicAppRuntime code={user.customApps[win.appId].code} />;
@@ -590,7 +595,7 @@ const WeberOS = () => {
                     <button onClick={handleLogout} className="p-2 hover:bg-red-500/20 text-slate-400 hover:text-red-400 rounded transition"><LogOut size={16}/></button>
                 </div>
                 <div className="p-2 grid grid-cols-1 gap-1 max-h-80 overflow-y-auto">
-                    {availableApps.map(app => (
+                    {sortedApps.map(app => (
                         <button key={app.id} onClick={() => openApp(app.id)} className="flex items-center gap-3 p-2 hover:bg-white/5 rounded text-left text-slate-200 transition">
                             <div className={`p-1.5 rounded ${app.color}`}>
                                 <app.icon size={16} className="text-white"/>
@@ -644,15 +649,15 @@ const WeberOS = () => {
             </div>
 
             <div className="flex items-center gap-2 md:gap-4 text-white text-xs">
-                <div className="hidden sm:flex items-center gap-2 md:gap-4">
-                    <Wifi size={16} />
+                <div className="flex items-center gap-2 md:gap-4">
+                    <Wifi size={16} className="hidden sm:block" />
                     <button 
                         onClick={(e) => { e.stopPropagation(); setShowVolumePopup(!showVolumePopup); }}
                         className="p-1 hover:bg-white/10 rounded transition"
                     >
                          {volume === 0 ? <VolumeX size={16} /> : volume < 50 ? <Volume1 size={16} /> : <Volume2 size={16} />}
                     </button>
-                    <Battery size={16} />
+                    <Battery size={16} className="hidden sm:block" />
                 </div>
                 <div className="flex flex-col items-end min-w-fit">
                     <span className="font-medium">{time.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
