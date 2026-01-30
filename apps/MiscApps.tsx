@@ -6,9 +6,12 @@ export const SnakeApp = () => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [score, setScore] = useState(0);
     const [gameOver, setGameOver] = useState(false);
-    const directionRef = useRef({ dx: 1, dy: 0 });
+    const directionRef = useRef({ dx: 1, dy: 0 }); // Default direction (Right)
+    const startedRef = useRef(false); // Game doesn't move until first keypress
 
     const handleDir = (x: number, y: number) => {
+        if (!startedRef.current) startedRef.current = true;
+        
         const { dx, dy } = directionRef.current;
         if (x !== 0 && dx !== 0) return;
         if (y !== 0 && dy !== 0) return;
@@ -21,29 +24,44 @@ export const SnakeApp = () => {
         const ctx = canvas.getContext('2d');
         if(!ctx) return;
 
-        let snake = [{x: 10, y: 10}];
+        // Start with 2 blocks
+        let snake = [{x: 10, y: 10}, {x: 9, y: 10}]; 
         let food = {x: 15, y: 15};
         let interval: any;
 
         const draw = () => {
             if(!ctx) return;
-            const { dx, dy } = directionRef.current;
+            
+            // Draw background and items always
             ctx.fillStyle = '#111';
             ctx.fillRect(0, 0, 400, 400);
             ctx.fillStyle = '#ff4444';
             ctx.fillRect(food.x * 20, food.y * 20, 18, 18);
             ctx.fillStyle = '#44ff44';
             snake.forEach(part => ctx.fillRect(part.x * 20, part.y * 20, 18, 18));
+            
+            // If not started or game over, stop logic here
+            if (!startedRef.current || gameOver) return;
+
+            const { dx, dy } = directionRef.current;
             const head = {x: snake[0].x + dx, y: snake[0].y + dy};
+            
+            // Collision detection
             if(head.x < 0 || head.x >= 20 || head.y < 0 || head.y >= 20 || snake.some(s => s.x === head.x && s.y === head.y)) {
                 setGameOver(true);
                 clearInterval(interval);
                 return;
             }
+            
             snake.unshift(head);
             if(head.x === food.x && head.y === food.y) {
                 setScore(s => s + 1);
-                food = { x: Math.floor(Math.random() * 20), y: Math.floor(Math.random() * 20) };
+                // Ensure food doesn't spawn on snake
+                let newFood;
+                do {
+                    newFood = { x: Math.floor(Math.random() * 20), y: Math.floor(Math.random() * 20) };
+                } while (snake.some(s => s.x === newFood.x && s.y === newFood.y));
+                food = newFood;
             } else snake.pop();
         };
 
@@ -55,7 +73,10 @@ export const SnakeApp = () => {
         };
 
         window.addEventListener('keydown', handleKey);
+        // Draw immediately to show initial state
+        draw();
         interval = setInterval(draw, 100);
+        
         return () => { window.removeEventListener('keydown', handleKey); clearInterval(interval); };
     }, []);
 
@@ -63,12 +84,17 @@ export const SnakeApp = () => {
         <div className="flex flex-col items-center justify-center h-full bg-black text-white p-4">
             <div className="mb-2 flex justify-between w-[300px] md:w-[400px]"><span>Snake</span><span>Score: {score}</span></div>
             <canvas ref={canvasRef} width={400} height={400} className="w-[300px] h-[300px] md:w-[400px] md:h-[400px] border border-gray-700 bg-[#111]" />
-            {gameOver && <div className="mt-2 text-red-500 font-bold">GAME OVER</div>}
+            {gameOver ? (
+                 <div className="mt-2 text-red-500 font-bold">GAME OVER</div>
+            ) : (
+                 <div className="mt-2 text-slate-500 text-xs">{!startedRef.current ? 'Press any arrow key to start' : 'Playing...'}</div>
+            )}
+            
             <div className="mt-4 grid grid-cols-3 gap-2 md:hidden">
-                <div /><button className="w-12 h-12 bg-slate-800 rounded-full flex items-center justify-center" onClick={() => handleDir(0, -1)}><ArrowUp /></button><div />
-                <button className="w-12 h-12 bg-slate-800 rounded-full flex items-center justify-center" onClick={() => handleDir(-1, 0)}><ArrowLeft /></button>
-                <button className="w-12 h-12 bg-slate-800 rounded-full flex items-center justify-center" onClick={() => handleDir(0, 1)}><ArrowDown /></button>
-                <button className="w-12 h-12 bg-slate-800 rounded-full flex items-center justify-center" onClick={() => handleDir(1, 0)}><ArrowRight /></button>
+                <div /><button className="w-12 h-12 bg-slate-800 rounded-full flex items-center justify-center active:bg-slate-700" onClick={() => handleDir(0, -1)}><ArrowUp /></button><div />
+                <button className="w-12 h-12 bg-slate-800 rounded-full flex items-center justify-center active:bg-slate-700" onClick={() => handleDir(-1, 0)}><ArrowLeft /></button>
+                <button className="w-12 h-12 bg-slate-800 rounded-full flex items-center justify-center active:bg-slate-700" onClick={() => handleDir(0, 1)}><ArrowDown /></button>
+                <button className="w-12 h-12 bg-slate-800 rounded-full flex items-center justify-center active:bg-slate-700" onClick={() => handleDir(1, 0)}><ArrowRight /></button>
             </div>
         </div>
     );
