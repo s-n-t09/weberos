@@ -91,7 +91,7 @@ export const SettingsApp = ({ user, setUser, onDeleteUser }: any) => {
                             <h3 className="font-bold mb-4 flex items-center gap-2"><Cpu size={18}/> System Info</h3>
                             <div className="space-y-2 text-sm">
                                 <div className="flex justify-between border-b pb-1">
-                                    <span className="text-slate-500">OS Version</span><span>WeberOS 1.1.0</span>
+                                    <span className="text-slate-500">OS Version</span><span>WeberOS 1.3.0</span>
                                 </div>
                                 <div className="flex justify-between border-b pb-1">
                                     <span className="text-slate-500">Storage Used</span><span>{JSON.stringify(user.fs).length} bytes</span>
