@@ -28,10 +28,11 @@ import {
     VolumeX, 
     Volume1, 
     Volume2,
-    Film
+    Film,
+    Bell
 } from 'lucide-react';
 
-import { UserProfile, WindowState, FileSystemNode } from './types';
+import { UserProfile, WindowState, FileSystemNode, SystemNotification } from './types';
 import { DEFAULT_FS, WALLPAPERS, DEFAULT_APPS, REPO_PACKAGES, FILE_ASSOCIATIONS } from './utils/constants';
 import { WindowFrame } from './components/WindowFrame';
 import { VolumePopup } from './components/VolumePopup';
@@ -45,12 +46,14 @@ import { MarketApp } from './apps/MarketApp';
 import { HelperApp } from './apps/HelperApp';
 import { WePicApp } from './apps/WePicApp';
 import { WePlayerApp } from './apps/WePlayerApp';
+import { WireBoxApp } from './apps/WireBoxApp';
 import { SnakeApp, CalcoApp, WeatherApp, DynamicAppRuntime } from './apps/MiscApps';
 
 // Registry
 const SYSTEM_REGISTRY: Record<string, { name: string, icon: any, color: string }> = {
   'explorer': { name: 'Files', icon: Folder, color: 'bg-yellow-500' },
   'terminal': { name: 'Terminal', icon: TerminalIcon, color: 'bg-gray-900' },
+  'wirebox': { name: 'WireBox', icon: Globe, color: 'bg-blue-400' },
   'coder': { name: 'Coder', icon: Code, color: 'bg-blue-600' },
   'snake': { name: 'Snake', icon: Gamepad2, color: 'bg-green-600' },
   'calco': { name: 'Calco', icon: Calculator, color: 'bg-orange-500' },
@@ -79,6 +82,10 @@ const WeberOS = () => {
   // Volume Controller
   const [volume, setVolume] = useState(70);
   const [showVolumePopup, setShowVolumePopup] = useState(false);
+
+  // Notifications
+  const [notifications, setNotifications] = useState<SystemNotification[]>([]);
+  const [showNotifPanel, setShowNotifPanel] = useState(false);
 
   // File Picking State
   const [openWithRequest, setOpenWithRequest] = useState<{file: string, apps: any[]} | null>(null);
@@ -138,7 +145,9 @@ const WeberOS = () => {
                 wallpaper: storedUser.settings?.wallpaper || WALLPAPERS[0], 
                 darkMode: true,
                 desktopIcons: storedUser.settings?.desktopIcons || {},
-                weather: storedUser.settings?.weather || { mode: 'auto' }
+                weather: storedUser.settings?.weather || { mode: 'auto' },
+                notifications: storedUser.settings?.notifications || { enabled: true, sound: true, external: true },
+                defaultApps: storedUser.settings?.defaultApps || {}
             }
         };
         setUser(safeUser);
@@ -167,7 +176,9 @@ const WeberOS = () => {
               wallpaper: WALLPAPERS[0], 
               darkMode: true,
               desktopIcons: {},
-              weather: { mode: 'auto' }
+              weather: { mode: 'auto' },
+              notifications: { enabled: true, sound: true, external: true },
+              defaultApps: {}
           }
       };
       
@@ -186,6 +197,34 @@ const WeberOS = () => {
       setStartOpen(false);
       setSelectedProfile(null);
       setPasswordInput('');
+      setNotifications([]);
+  };
+
+  const sendNotification = (appId: string, title: string, message: string) => {
+      if (!user?.settings.notifications.enabled) return;
+
+      const newNotif: SystemNotification = {
+          id: Date.now().toString(),
+          app: appId,
+          title,
+          message,
+          timestamp: Date.now(),
+          read: false
+      };
+      setNotifications(prev => [newNotif, ...prev]);
+
+      // External Browser Notification
+      if (user.settings.notifications.external && 'Notification' in window) {
+          if (Notification.permission === 'granted') {
+              new Notification(title, { body: message });
+          } else if (Notification.permission !== 'denied') {
+              Notification.requestPermission().then(permission => {
+                  if (permission === 'granted') {
+                      new Notification(title, { body: message });
+                  }
+              });
+          }
+      }
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -215,7 +254,7 @@ const WeberOS = () => {
               content: content
           };
           setFs({ ...fs });
-          alert(`File uploaded to ~/uploads/${safeName}`);
+          sendNotification('explorer', 'File Uploaded', `Uploaded ${safeName} successfully.`);
       };
 
       if (isImage || isAudio || isVideo) {
@@ -318,6 +357,12 @@ const WeberOS = () => {
           openApp('coder', { file: fullPath });
           return;
       }
+
+      // Check user default apps first
+      if (user?.settings.defaultApps && user.settings.defaultApps[ext]) {
+          openApp(user.settings.defaultApps[ext], { file: fullPath });
+          return;
+      }
       
       const appIds = FILE_ASSOCIATIONS[ext];
       if(!appIds || appIds.length === 0) {
@@ -380,13 +425,16 @@ const WeberOS = () => {
 
   if (!user) {
       return (
-          <div className="h-screen w-screen bg-slate-900 flex items-center justify-center font-sans text-white">
-              <div className="bg-slate-800/50 p-8 rounded-2xl shadow-2xl backdrop-blur-xl border border-slate-700 w-full max-w-md mx-4 animate-in fade-in zoom-in duration-300">
+          <div 
+            className="h-screen w-screen bg-slate-900 flex items-center justify-center font-sans text-white"
+            style={{ backgroundColor: '#0f172a', width: '100vw', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          >
+              <div className="bg-slate-800/50 p-8 rounded-2xl shadow-2xl backdrop-blur-xl border border-slate-700 w-full max-w-md mx-4">
                       <div className="flex flex-col items-center mb-8">
                           <div className="w-16 h-16 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg mb-4 overflow-hidden">
                               <img src="/logo.png" alt="WeberOS Logo" className="w-full h-full object-contain p-2" />
                           </div>
-                          <h1 className="text-2xl font-bold text-center">WeberOS v1.3</h1>
+                          <h1 className="text-2xl font-bold text-center">WeberOS v1.4</h1>
                       </div>
 
                   {!createMode && !selectedProfile && (
@@ -416,7 +464,7 @@ const WeberOS = () => {
                   )}
 
                   {selectedProfile && (
-                      <div className="animate-in slide-in-from-right-4 duration-200">
+                      <div>
                           <div className="flex items-center gap-4 mb-6">
                               <button onClick={() => { setSelectedProfile(null); setPasswordInput(''); }} className="p-2 hover:bg-white/10 rounded-full transition"><ArrowBack size={20}/></button>
                               <div className="flex items-center gap-3">
@@ -447,7 +495,7 @@ const WeberOS = () => {
                   )}
 
                   {createMode && (
-                      <div className="animate-in slide-in-from-right-4 duration-200">
+                      <div>
                           <div className="flex items-center gap-2 mb-6">
                               <button onClick={() => { setCreateMode(false); setUsernameInput(''); setPasswordInput(''); }} className="p-2 hover:bg-white/10 rounded-full transition"><ArrowBack size={20}/></button>
                               <h2 className="text-xl font-bold">Create Profile</h2>
@@ -489,7 +537,7 @@ const WeberOS = () => {
             backgroundPosition: 'center',
             transition: 'background-image 0.5s ease-in-out'
         }}
-        onClick={() => { setShowVolumePopup(false); }}
+        onClick={() => { setShowVolumePopup(false); setShowNotifPanel(false); setStartOpen(false); }}
     >
         {/* Hidden File Input for Uploads */}
         <input type="file" id="hidden-file-input" onChange={handleFileUpload} className="hidden" />
@@ -551,12 +599,13 @@ const WeberOS = () => {
             else if (win.appId === 'helper') AppContent = <HelperApp />;
             else if (win.appId === 'wepic') AppContent = <WePicApp fs={fs} launchData={win.data} openFilePicker={openFilePicker} />;
             else if (win.appId === 'weplayer') AppContent = <WePlayerApp fs={fs} launchData={win.data} openFilePicker={openFilePicker} volume={volume} />;
+            else if (win.appId === 'wirebox') AppContent = <WireBoxApp user={user} setUser={setUser} />;
             
             else if (user.customApps[win.appId]) {
-                AppContent = <DynamicAppRuntime code={user.customApps[win.appId].code} />;
+                AppContent = <DynamicAppRuntime app={user.customApps[win.appId]} onNotify={sendNotification} />;
             }
             
-            else if (win.appId === 'browser') AppContent = <div className="h-full bg-white flex items-center justify-center text-slate-500">Browser Placeholder</div>;
+            else if (win.appId === 'browser') AppContent = <div className="h-full bg-white flex items-center justify-center text-slate-500">Use WireBox instead!</div>;
             else if (win.appId === 'music') AppContent = <div className="h-full bg-gray-900 flex items-center justify-center text-pink-500">Music Player Placeholder</div>;
             else if (win.appId === 'doom') AppContent = <div className="h-full bg-black flex items-center justify-center text-red-600 font-bold font-mono text-2xl">DOOM IS RUNNING...</div>;
             else if (win.appId === 'matrix') AppContent = <div className="h-full bg-black flex items-center justify-center text-green-500 font-mono">Wake up, Neo...</div>;
@@ -584,7 +633,10 @@ const WeberOS = () => {
 
         {/* Start Menu */}
         {startOpen && (
-            <div className="fixed bottom-[84px] left-4 w-80 bg-slate-900/95 backdrop-blur-xl border border-slate-700 rounded-lg shadow-2xl overflow-hidden z-[100] animate-in slide-in-from-bottom-5 fade-in duration-200">
+            <div 
+                className="fixed bottom-[84px] left-4 w-80 bg-slate-900/95 backdrop-blur-xl border border-slate-700 rounded-lg shadow-2xl overflow-hidden z-[200]"
+                onClick={(e) => e.stopPropagation()}
+            >
                 <div className="p-4 bg-slate-800/50 border-b border-slate-700 flex items-center gap-3">
                     <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold">
                         {user.username.substring(0,2).toUpperCase()}
@@ -612,11 +664,40 @@ const WeberOS = () => {
             <VolumePopup volume={volume} setVolume={setVolume} />
         )}
 
+        {/* Notifications Panel */}
+        {showNotifPanel && (
+            <div 
+                className="fixed bottom-20 right-2 w-80 max-h-96 bg-slate-900/95 backdrop-blur border border-slate-700 rounded-xl flex flex-col z-[210] shadow-2xl" 
+                onClick={(e) => e.stopPropagation()}
+            >
+                <div className="p-3 border-b border-slate-700 flex justify-between items-center text-white">
+                    <span className="font-bold">Notifications</span>
+                    {notifications.length > 0 && <button onClick={() => setNotifications([])} className="text-xs text-blue-400 hover:text-blue-300">Clear All</button>}
+                </div>
+                <div className="flex-1 overflow-y-auto p-2 space-y-2">
+                    {notifications.length === 0 ? (
+                        <div className="text-center text-slate-500 py-8 text-sm">No new notifications</div>
+                    ) : (
+                        notifications.map(notif => (
+                            <div key={notif.id} className="bg-white/5 p-3 rounded-lg border border-white/5 hover:bg-white/10 transition">
+                                <div className="flex justify-between items-start mb-1">
+                                    <span className="text-xs font-bold text-blue-400 uppercase">{notif.app}</span>
+                                    <span className="text-[10px] text-slate-500">{new Date(notif.timestamp).toLocaleTimeString()}</span>
+                                </div>
+                                <div className="font-bold text-sm text-slate-200">{notif.title}</div>
+                                <div className="text-xs text-slate-400">{notif.message}</div>
+                            </div>
+                        ))
+                    )}
+                </div>
+            </div>
+        )}
+
         {/* Taskbar */}
-        <div className="fixed bottom-2 left-2 right-2 h-16 bg-slate-900/80 backdrop-blur-xl border border-white/10 rounded-2xl flex items-center px-4 md:px-6 justify-between z-[100] shadow-2xl">
+        <div className="fixed bottom-2 left-2 right-2 h-16 bg-slate-900/80 backdrop-blur-xl border border-white/10 rounded-2xl flex items-center px-4 md:px-6 justify-between z-[150] shadow-2xl">
             <div className="flex items-center gap-4">
                 <button 
-                    onClick={() => setStartOpen(!startOpen)}
+                    onClick={(e) => { e.stopPropagation(); setStartOpen(!startOpen); setShowVolumePopup(false); setShowNotifPanel(false); }}
                     className={`p-2 rounded transition ${startOpen ? 'bg-white/20' : 'hover:bg-white/10'}`}
                 >
                     <LayoutGrid size={20} className="text-white" />
@@ -652,10 +733,17 @@ const WeberOS = () => {
                 <div className="flex items-center gap-2 md:gap-4">
                     <Wifi size={16} className="hidden sm:block" />
                     <button 
-                        onClick={(e) => { e.stopPropagation(); setShowVolumePopup(!showVolumePopup); }}
+                        onClick={(e) => { e.stopPropagation(); setShowVolumePopup(!showVolumePopup); setShowNotifPanel(false); }}
                         className="p-1 hover:bg-white/10 rounded transition"
                     >
                          {volume === 0 ? <VolumeX size={16} /> : volume < 50 ? <Volume1 size={16} /> : <Volume2 size={16} />}
+                    </button>
+                    <button 
+                        onClick={(e) => { e.stopPropagation(); setShowNotifPanel(!showNotifPanel); setShowVolumePopup(false); }}
+                        className="p-1 hover:bg-white/10 rounded transition relative"
+                    >
+                         <Bell size={16} />
+                         {notifications.length > 0 && <span className="absolute top-0.5 right-0.5 w-2 h-2 bg-red-500 rounded-full"></span>}
                     </button>
                     <Battery size={16} className="hidden sm:block" />
                 </div>
@@ -669,5 +757,10 @@ const WeberOS = () => {
   );
 };
 
-const root = createRoot(document.getElementById('root')!);
-root.render(<WeberOS />);
+const container = document.getElementById('root');
+if (container) {
+    const root = createRoot(container);
+    root.render(<WeberOS />);
+} else {
+    console.error("WeberOS Fatal: Root element not found");
+}

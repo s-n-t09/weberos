@@ -22,6 +22,7 @@ export type CustomApp = {
     id: string;
     name: string;
     iconName: string;
+    permissions?: string[];
     code: string; 
 };
 
@@ -30,6 +31,15 @@ export type WeatherConfig = {
     city?: string;
     lat?: number;
     lon?: number;
+};
+
+export type SystemNotification = {
+    id: string;
+    app: string;
+    title: string;
+    message: string;
+    timestamp: number;
+    read: boolean;
 };
 
 export type UserProfile = {
@@ -43,5 +53,11 @@ export type UserProfile = {
       darkMode: boolean;
       desktopIcons: Record<string, {x: number, y: number}>;
       weather: WeatherConfig;
+      notifications: {
+          enabled: boolean;
+          sound: boolean;
+          external: boolean; // Browser notifications
+      };
+      defaultApps: Record<string, string>; // ext -> appId
   }
 };
