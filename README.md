@@ -127,6 +127,7 @@ npm run preview
 | **Terminal** | 📟 | Command-line interface for advanced operations. |
 | **Coder** | 📝 | Code editor supporting text and `.wbr` files. |
 | **Settings** | ⚙️ | System configuration (Wallpaper, Profiles, Weather). |
+| **Wire Box** | 🌍📦 | Simple Web browser for the system. |
 | **Market** | 🛍️ | App store to discover and install new packages. |
 | **WePlayer** | 🎬 | Video and Music player with simple style and timestamp control. |
 | **WePic** | 🖼️ | Image viewer for standard image formats. |
