@@ -12,14 +12,15 @@ export const DEFAULT_FS: FileSystemNode = {
         user: {
           type: 'dir',
           children: {
-            'readme.txt': { type: 'file', content: 'Welcome to WeberOS!\n\nThis is a fully functional web-based OS.\nTry opening the Terminal and running "help".' },
-            'todo.txt': { type: 'file', content: '- Install packages with wpm\n- Play Snake\n- Customize Wallpaper' },
+            'readme.txt': { type: 'file', content: 'Welcome to WeberOS 1.4!\n\nThis is a fully functional web-based OS.\nTry the new WireBox Browser!' },
+            'todo.txt': { type: 'file', content: '- Try WireBox\n- Check Notifications\n- Write a .wbr app with permissions' },
             'hello.wbr': { 
                 type: 'file', 
                 content: JSON.stringify({
                     id: "hello-world",
                     name: "Hello World",
                     icon: "Smile",
+                    permissions: ["notifications"],
                     code: "return () => React.createElement('div', {className: 'h-full flex items-center justify-center bg-purple-600 text-white text-2xl font-bold'}, 'Hello World!')"
                 }, null, 2)
             },
@@ -32,6 +33,10 @@ export const DEFAULT_FS: FileSystemNode = {
             uploads: {
                 type: 'dir',
                 children: {}
+            },
+            downloads: {
+                type: 'dir',
+                children: {}
             }
           }
         }
@@ -42,7 +47,7 @@ export const DEFAULT_FS: FileSystemNode = {
   }
 };
 
-export const DEFAULT_APPS = ['explorer', 'terminal', 'coder', 'snake', 'calco', 'weather', 'settings', 'market', 'helper', 'wepic', 'weplayer'];
+export const DEFAULT_APPS = ['explorer', 'terminal', 'wirebox', 'coder', 'snake', 'calco', 'weather', 'settings', 'market', 'helper', 'wepic', 'weplayer'];
 
 export const WALLPAPERS = [
   "https://images.unsplash.com/photo-1477346611705-65d1883cee1e?auto=format&fit=crop&q=80&w=2070",
@@ -55,7 +60,6 @@ export const WALLPAPERS = [
 ];
 
 export const REPO_PACKAGES = [
-  { name: 'browser', description: 'WeberSurf Web Browser', size: '45MB' },
   { name: 'doom', description: 'DOOM (Shareware)', size: '15MB' },
   { name: 'matrix', description: 'Matrix Screensaver', size: '1MB' },
   ...Array.from({ length: 5 }, (_, i) => ({ name: `tool-${i}`, description: `Utility Tool ${i}`, size: '150KB' }))
@@ -67,6 +71,7 @@ export const FILE_ASSOCIATIONS: Record<string, string[]> = {
     'js': ['coder'],
     'json': ['coder'],
     'wbr': ['coder'],
+    'html': ['wirebox', 'coder'],
     'png': ['wepic'],
     'jpg': ['wepic'],
     'jpeg': ['wepic'],
