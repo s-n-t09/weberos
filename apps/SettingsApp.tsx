@@ -1,12 +1,40 @@
 import React, { useState } from 'react';
-import { User, Palette, HardDrive, Download, Upload, Cpu, AlertCircle, Trash2, CheckCircle2 } from 'lucide-react';
-import { WALLPAPERS } from '../utils/constants';
+import { User, Palette, HardDrive, Download, Upload, Cpu, AlertCircle, Trash2, CheckCircle2, Bell, AppWindow } from 'lucide-react';
+import { WALLPAPERS, FILE_ASSOCIATIONS, DEFAULT_APPS } from '../utils/constants';
 
 export const SettingsApp = ({ user, setUser, onDeleteUser }: any) => {
-    const [activeTab, setActiveTab] = useState<'profile' | 'wallpaper'>('profile');
+    const [activeTab, setActiveTab] = useState<'profile' | 'wallpaper' | 'notifications' | 'defaults'>('profile');
 
     const handleWallpaperChange = (url: string) => {
         setUser({ ...user, settings: { ...user.settings, wallpaper: url } });
+    };
+
+    const toggleNotificationSetting = (key: string) => {
+        const current = user.settings.notifications || { enabled: true, sound: true, external: true };
+        setUser({
+            ...user,
+            settings: {
+                ...user.settings,
+                notifications: {
+                    ...current,
+                    // @ts-ignore
+                    [key]: !current[key]
+                }
+            }
+        });
+    };
+
+    const handleDefaultAppChange = (ext: string, appId: string) => {
+        setUser({
+            ...user,
+            settings: {
+                ...user.settings,
+                defaultApps: {
+                    ...(user.settings.defaultApps || {}),
+                    [ext]: appId
+                }
+            }
+        });
     };
 
     const handleExport = () => {
@@ -27,7 +55,6 @@ export const SettingsApp = ({ user, setUser, onDeleteUser }: any) => {
             try {
                 const data = JSON.parse(ev.target?.result as string);
                 if (data.username && data.fs) {
-                    // Update user and force reload
                     setUser(data);
                     alert("Session imported successfully!");
                 } else {
@@ -46,6 +73,8 @@ export const SettingsApp = ({ user, setUser, onDeleteUser }: any) => {
         }
     };
 
+    const notifSettings = user.settings.notifications || { enabled: true, sound: true, external: true };
+
     return (
         <div className="h-full bg-slate-100 text-slate-800 flex overflow-hidden">
              {/* Sidebar */}
@@ -56,6 +85,12 @@ export const SettingsApp = ({ user, setUser, onDeleteUser }: any) => {
                  </button>
                  <button onClick={() => setActiveTab('wallpaper')} className={`text-left px-4 py-2 rounded-lg transition flex items-center gap-2 ${activeTab === 'wallpaper' ? 'bg-blue-50 text-blue-600 font-medium' : 'hover:bg-slate-50'}`}>
                     <Palette size={18} /> Wallpaper
+                 </button>
+                 <button onClick={() => setActiveTab('notifications')} className={`text-left px-4 py-2 rounded-lg transition flex items-center gap-2 ${activeTab === 'notifications' ? 'bg-blue-50 text-blue-600 font-medium' : 'hover:bg-slate-50'}`}>
+                    <Bell size={18} /> Notifications
+                 </button>
+                 <button onClick={() => setActiveTab('defaults')} className={`text-left px-4 py-2 rounded-lg transition flex items-center gap-2 ${activeTab === 'defaults' ? 'bg-blue-50 text-blue-600 font-medium' : 'hover:bg-slate-50'}`}>
+                    <AppWindow size={18} /> Default Apps
                  </button>
              </div>
 
@@ -91,7 +126,7 @@ export const SettingsApp = ({ user, setUser, onDeleteUser }: any) => {
                             <h3 className="font-bold mb-4 flex items-center gap-2"><Cpu size={18}/> System Info</h3>
                             <div className="space-y-2 text-sm">
                                 <div className="flex justify-between border-b pb-1">
-                                    <span className="text-slate-500">OS Version</span><span>WeberOS 1.3.0</span>
+                                    <span className="text-slate-500">OS Version</span><span>WeberOS 1.4.0</span>
                                 </div>
                                 <div className="flex justify-between border-b pb-1">
                                     <span className="text-slate-500">Storage Used</span><span>{JSON.stringify(user.fs).length} bytes</span>
@@ -104,6 +139,63 @@ export const SettingsApp = ({ user, setUser, onDeleteUser }: any) => {
                              <button onClick={handleDelete} className="bg-red-600 text-white px-4 py-2 rounded flex items-center gap-2 hover:bg-red-700 transition">
                                 <Trash2 size={16} /> Delete User Profile
                              </button>
+                        </div>
+                     </div>
+                 )}
+
+                 {activeTab === 'notifications' && (
+                     <div className="max-w-xl">
+                         <h3 className="text-2xl font-bold mb-6">Notification Settings</h3>
+                         <div className="bg-white rounded-xl border border-slate-200 divide-y">
+                            <div className="p-4 flex items-center justify-between">
+                                <div>
+                                    <div className="font-bold">System Notifications</div>
+                                    <div className="text-sm text-slate-500">Enable in-OS notifications tray</div>
+                                </div>
+                                <input 
+                                    type="checkbox" 
+                                    checked={notifSettings.enabled}
+                                    onChange={() => toggleNotificationSetting('enabled')}
+                                    className="w-5 h-5 accent-blue-600"
+                                />
+                            </div>
+                            <div className="p-4 flex items-center justify-between">
+                                <div>
+                                    <div className="font-bold">Browser Notifications</div>
+                                    <div className="text-sm text-slate-500">Allow WeberOS to send real browser notifications</div>
+                                </div>
+                                <input 
+                                    type="checkbox" 
+                                    checked={notifSettings.external}
+                                    onChange={() => toggleNotificationSetting('external')}
+                                    className="w-5 h-5 accent-blue-600"
+                                />
+                            </div>
+                         </div>
+                     </div>
+                 )}
+
+                 {activeTab === 'defaults' && (
+                     <div className="max-w-xl">
+                        <h3 className="text-2xl font-bold mb-6">Default Apps</h3>
+                        <div className="bg-white rounded-xl border border-slate-200 divide-y">
+                            {Object.entries(FILE_ASSOCIATIONS).map(([ext, apps]) => {
+                                const currentDefault = user.settings.defaultApps?.[ext] || apps[0];
+                                return (
+                                    <div key={ext} className="p-4 flex items-center justify-between">
+                                        <div className="font-mono bg-slate-100 px-2 py-1 rounded text-sm">.{ext}</div>
+                                        <select 
+                                            value={currentDefault} 
+                                            onChange={(e) => handleDefaultAppChange(ext, e.target.value)}
+                                            className="bg-slate-50 border border-slate-300 rounded px-2 py-1 text-sm outline-none focus:border-blue-500"
+                                        >
+                                            {DEFAULT_APPS.map(app => (
+                                                <option key={app} value={app}>{app}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                );
+                            })}
                         </div>
                      </div>
                  )}

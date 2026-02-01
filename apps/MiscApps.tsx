@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight, MapPin, MoreVertical, Search, CloudSun, RefreshCw, AlertCircle } from 'lucide-react';
+import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight, MapPin, MoreVertical, Search, CloudSun, RefreshCw, AlertCircle, ShieldAlert } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 
 export const SnakeApp = () => {
@@ -229,22 +229,70 @@ export const WeatherApp = ({ user, setUser }: any) => {
     );
 };
 
-export const DynamicAppRuntime = ({ code }: { code: string }) => {
+export const DynamicAppRuntime = ({ app, onNotify }: { app: any, onNotify: any }) => {
+    // Error Boundary State within component for simple handling
+    const [error, setError] = useState<any>(null);
+
     const Component = useMemo(() => {
         try {
-            const func = new Function('React', 'LucideIcons', code);
-            return func(React, LucideIcons);
+            // Permission Check Simulation
+            const permissions = app.permissions || [];
+            
+            const sandboxApi = {
+                notification: (title: string, msg: string) => {
+                    if (permissions.includes('notifications')) {
+                        onNotify(app.id, title, msg);
+                    } else {
+                        console.warn(`App ${app.name} tried to send notification without permission.`);
+                    }
+                },
+                // Add more mocked APIs here based on permissions
+            };
+
+            const func = new Function('React', 'LucideIcons', 'Sys', app.code);
+            return func(React, LucideIcons, sandboxApi);
         } catch (e) {
-            return () => (
-                <div className="h-full flex flex-col items-center justify-center text-red-500 p-4">
-                     <AlertCircle className="mb-2" />
-                     <span className="font-bold">App Crash</span>
-                     <span className="text-xs">{(e as any).message}</span>
-                </div>
-            );
+            setError(e);
+            return null;
         }
-    }, [code]);
+    }, [app.code, app.permissions]);
+
+    if (error) {
+        return (
+            <div className="h-full flex flex-col items-center justify-center text-red-500 p-6 bg-red-50">
+                 <ShieldAlert size={48} className="mb-4" />
+                 <h2 className="font-bold text-xl mb-2">App Crash: {app.name}</h2>
+                 <div className="bg-white p-4 rounded border border-red-200 text-xs font-mono w-full overflow-auto max-h-48">
+                    <p className="font-bold mb-1">Error Message:</p>
+                    <p>{error.message}</p>
+                    {error.stack && (
+                        <>
+                            <p className="font-bold mt-2 mb-1">Stack Trace:</p>
+                            <pre>{error.stack}</pre>
+                        </>
+                    )}
+                 </div>
+                 <p className="text-xs text-slate-500 mt-4">
+                     Please check the app source code in Coder.
+                 </p>
+            </div>
+        );
+    }
 
     if (!Component) return null;
-    return <Component />;
+
+    // Wrap execution in another try/catch for runtime errors during render
+    try {
+        return <Component />;
+    } catch (e) {
+        // This catch block might not catch all render errors in React 18 without a real ErrorBoundary class,
+        // but works for immediate execution errors.
+        return (
+             <div className="h-full flex flex-col items-center justify-center text-red-500 p-4">
+                 <AlertCircle className="mb-2" />
+                 <span className="font-bold">Runtime Error</span>
+                 <span className="text-xs">{(e as any).message}</span>
+            </div>
+        )
+    }
 };

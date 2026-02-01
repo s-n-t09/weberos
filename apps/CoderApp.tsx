@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, Save, FileCode, ChevronDown, ChevronRight } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Plus, Save, FileCode, ChevronDown, ChevronRight, FilePlus } from 'lucide-react';
 import { resolvePath } from '../utils/fs';
 import { USER_HOME_PATH } from '../utils/constants';
 
@@ -53,6 +53,7 @@ export const CoderApp = ({ fs, setFs, launchData }: any) => {
     const [currentFile, setCurrentFile] = useState<string | null>(null);
     const [content, setContent] = useState('');
     const [status, setStatus] = useState('Welcome to Coder');
+    const [suggestion, setSuggestion] = useState<string | null>(null);
 
     // Only show user directory in sidebar
     let userDir = fs;
@@ -61,11 +62,10 @@ export const CoderApp = ({ fs, setFs, launchData }: any) => {
     }
 
     const handleFileSelect = (pathStr: string) => {
-        // PathStr is relative to userDir for tree rendering, but we need to resolve it properly
         const fullPath = [...USER_HOME_PATH, ...pathStr.split('/')].join('/');
         const { node } = resolvePath(fs, [], fullPath);
         if (node && node.type === 'file') {
-            setCurrentFile(pathStr); // Keep internal reference relative or unique
+            setCurrentFile(pathStr);
             setContent(node.content || '');
             setStatus(`Editing: ${pathStr}`);
         }
@@ -73,12 +73,8 @@ export const CoderApp = ({ fs, setFs, launchData }: any) => {
     
     useEffect(() => {
         if(launchData?.file) {
-            // launchData.file is absolute path string "home/user/..."
-            // we need to convert to relative if we want to work with handleFileSelect logic, or just load directly.
-            // Simplified:
             const { node } = resolvePath(fs, [], launchData.file);
             if (node && node.type === 'file') {
-                 // Check if it is under user home
                  const prefix = USER_HOME_PATH.join('/');
                  if(launchData.file.startsWith(prefix)) {
                      const rel = launchData.file.substring(prefix.length + 1);
@@ -86,7 +82,6 @@ export const CoderApp = ({ fs, setFs, launchData }: any) => {
                      setContent(node.content || '');
                      setStatus(`Editing: ${rel}`);
                  } else {
-                     // External/System file
                      setCurrentFile(launchData.file);
                      setContent(node.content || '');
                      setStatus(`Editing: ${launchData.file}`);
@@ -96,30 +91,45 @@ export const CoderApp = ({ fs, setFs, launchData }: any) => {
     }, [launchData]);
 
     const handleNew = () => {
-        setCurrentFile(null);
-        setContent('');
-        setStatus('Untitled (New File)');
+        const name = prompt("Enter new filename (e.g. myapp.wbr):");
+        if (!name) return;
+        
+        let parent = fs;
+        for(const p of USER_HOME_PATH) {
+            if(parent.children) parent = parent.children[p];
+        }
+        
+        if (parent.children) {
+            if (parent.children[name]) {
+                alert("File already exists!");
+            } else {
+                // Default content based on extension
+                let initialContent = '';
+                if (name.endsWith('.wbr')) {
+                    initialContent = JSON.stringify({
+                        id: name.replace('.wbr', ''),
+                        name: name.replace('.wbr', ''),
+                        icon: "Box",
+                        permissions: [],
+                        code: "return () => React.createElement('div', null, 'Hello')"
+                    }, null, 2);
+                }
+
+                parent.children[name] = { type: 'file', content: initialContent };
+                setFs({ ...fs });
+                setCurrentFile(name);
+                setContent(initialContent);
+                setStatus(`Created: ${name}`);
+            }
+        }
     };
 
     const handleSave = () => {
         if (!currentFile) {
-            const name = prompt("Save as (filename):");
-            if (!name) return;
-            // Create in root of user home
-            let parent = fs;
-            for(const p of USER_HOME_PATH) {
-                if(parent.children) parent = parent.children[p];
-            }
-            if (parent.children) {
-                parent.children[name] = { type: 'file', content };
-                setFs({ ...fs });
-                setCurrentFile(name);
-                setStatus(`Saved: ${name}`);
-            }
+            handleNew(); // Fallback to create logic
             return;
         }
 
-        // Check if currentFile is absolute or relative
         let fullPathStr = currentFile;
         if (!currentFile.startsWith('home/')) {
             fullPathStr = [...USER_HOME_PATH, ...currentFile.split('/')].join('/');
@@ -133,6 +143,30 @@ export const CoderApp = ({ fs, setFs, launchData }: any) => {
         }
     };
 
+    const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+        const val = e.target.value;
+        setContent(val);
+        
+        // Basic "Guessing" / Autocomplete logic
+        const lastWord = val.split(/\s+/).pop();
+        if (lastWord === 'w') setSuggestion('wbr');
+        else if (lastWord === 'Re') setSuggestion('React.createElement');
+        else if (lastWord === 're') setSuggestion('return');
+        else if (lastWord === 'pe') setSuggestion('permissions');
+        else setSuggestion(null);
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === 'Tab' && suggestion) {
+            e.preventDefault();
+            const words = content.split(/\s+/);
+            words.pop(); // remove incomplete word
+            const newContent = content.substring(0, content.lastIndexOf(' ') + 1) + suggestion;
+            setContent(newContent);
+            setSuggestion(null);
+        }
+    };
+
     const lines = content.split('\n');
 
     return (
@@ -141,7 +175,7 @@ export const CoderApp = ({ fs, setFs, launchData }: any) => {
             <div className="w-48 bg-[#252526] border-r border-[#3e3e42] flex flex-col">
                 <div className="p-2 text-xs font-bold text-slate-500 uppercase tracking-wider flex justify-between items-center">
                     <span>Explorer</span>
-                    <button onClick={handleNew} className="hover:text-white" title="New File"><Plus size={14}/></button>
+                    <button onClick={handleNew} className="hover:text-white" title="New File"><FilePlus size={14}/></button>
                 </div>
                 <div className="flex-1 overflow-y-auto">
                     {Object.entries(userDir.children || {}).map(([name, node]) => (
@@ -176,13 +210,21 @@ export const CoderApp = ({ fs, setFs, launchData }: any) => {
                         ))}
                     </div>
                     {/* Editor */}
-                    <textarea 
-                        className="flex-1 bg-[#1e1e1e] text-[#d4d4d4] p-4 outline-none resize-none leading-6 whitespace-pre tab-4"
-                        value={content}
-                        onChange={e => setContent(e.target.value)}
-                        spellCheck={false}
-                        wrap="off"
-                    />
+                    <div className="flex-1 relative">
+                        <textarea 
+                            className="w-full h-full bg-[#1e1e1e] text-[#d4d4d4] p-4 outline-none resize-none leading-6 whitespace-pre tab-4"
+                            value={content}
+                            onChange={handleContentChange}
+                            onKeyDown={handleKeyDown}
+                            spellCheck={false}
+                            wrap="off"
+                        />
+                        {suggestion && (
+                             <div className="absolute bottom-4 right-4 bg-blue-900/80 text-white px-2 py-1 rounded text-xs animate-pulse">
+                                 Press TAB to insert: <strong>{suggestion}</strong>
+                             </div>
+                        )}
+                    </div>
                 </div>
             </div>
         </div>
