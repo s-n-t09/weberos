@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ArrowLeft, ArrowRight, RotateCcw, Search, Plus, X, Globe, Settings, Download, AlertTriangle, Shield, ShieldAlert } from 'lucide-react';
-import { UserProfile } from '../types';
+import { ArrowLeft, ArrowRight, RotateCcw, Search, Plus, X, Globe, Settings, Download, Shield, ExternalLink, Home } from 'lucide-react';
+import { UserProfile, FileSystemNode } from '../types';
 
 interface Tab {
     id: string;
@@ -15,25 +15,23 @@ interface Tab {
 
 const SEARCH_ENGINES = {
     'DuckDuckGo': 'https://duckduckgo.com/lite/?q=',
+    'Google': 'https://www.google.com/search?q=',
     'Bing': 'https://www.bing.com/search?q='
 };
 
-export const WireBoxApp = ({ user, setUser }: { user: UserProfile, setUser: (u: UserProfile) => void }) => {
-    // ProxyMode is now TRUE by default
+export const WireBoxApp = ({ user, setUser, openApp }: { user: UserProfile, setUser: (u: UserProfile) => void, openApp: (id: string, data?: any) => void }) => {
     const [tabs, setTabs] = useState<Tab[]>([
-        { id: '1', title: 'New Tab', url: '', loading: false, history: [''], historyIndex: 0, proxyMode: true }
+        { id: '1', title: 'Home', url: 'weberos://home', loading: false, history: ['weberos://home'], historyIndex: 0, proxyMode: true }
     ]);
     const [activeTabId, setActiveTabId] = useState('1');
     const [urlInput, setUrlInput] = useState('');
-    // Default engine changed to DuckDuckGo since Google is removed
-    const [engine, setEngine] = useState<'DuckDuckGo' | 'Bing'>('DuckDuckGo');
+    const [engine, setEngine] = useState<'DuckDuckGo' | 'Google' | 'Bing'>('DuckDuckGo');
     const [showSettings, setShowSettings] = useState(false);
-    const [activeSection, setActiveSection] = useState<'browser' | 'downloads'>('browser');
 
     const activeTab = tabs.find(t => t.id === activeTabId) || tabs[0];
 
     useEffect(() => {
-        setUrlInput(activeTab.url);
+        setUrlInput(activeTab.url === 'weberos://home' ? '' : activeTab.url);
     }, [activeTabId, activeTab.url]);
 
     const updateTab = (id: string, updates: Partial<Tab>) => {
@@ -41,28 +39,24 @@ export const WireBoxApp = ({ user, setUser }: { user: UserProfile, setUser: (u: 
     };
 
     const handleNavigate = async (inputUrl: string) => {
+        if (!inputUrl) return;
+        
         let finalUrl = inputUrl;
         let displayTitle = inputUrl;
-        let originalUrl = inputUrl; 
 
-        if (!inputUrl.startsWith('http') && !inputUrl.startsWith('data:') && !inputUrl.includes('.')) {
-            // Search logic
-            // @ts-ignore
-            originalUrl = SEARCH_ENGINES[engine] + encodeURIComponent(inputUrl);
-            displayTitle = `${engine}: ${inputUrl}`;
-        } else if (!inputUrl.startsWith('http') && !inputUrl.startsWith('data:')) {
-            originalUrl = 'https://' + inputUrl;
+        if (inputUrl === 'weberos://home') {
+            updateTab(activeTabId, { url: inputUrl, title: 'Home', loading: false, srcDoc: undefined });
+            return;
         }
-        
-        // Always set title to something friendly if possible
-        if(originalUrl.startsWith('https://')) displayTitle = originalUrl.replace('https://', '');
 
-        // For proxy logic, we generally want the final destination URL if it's a search
-        finalUrl = originalUrl;
+        if (!inputUrl.startsWith('http') && !inputUrl.startsWith('weberos://') && !inputUrl.includes('.')) {
+            finalUrl = SEARCH_ENGINES[engine] + encodeURIComponent(inputUrl);
+            displayTitle = `${engine}: ${inputUrl}`;
+        } else if (!inputUrl.startsWith('http') && !inputUrl.startsWith('weberos://')) {
+            finalUrl = 'https://' + inputUrl;
+        }
 
         const newHistory = [...activeTab.history.slice(0, activeTab.historyIndex + 1), finalUrl];
-        
-        // Optimistic update
         updateTab(activeTabId, { 
             url: finalUrl,
             loading: true,
@@ -71,287 +65,175 @@ export const WireBoxApp = ({ user, setUser }: { user: UserProfile, setUser: (u: 
             historyIndex: newHistory.length - 1
         });
 
+        // Simulation of link redirection and file download check
+        if (finalUrl.match(/\.(zip|pdf|exe|png|jpg|mp4|wbr)$/i)) {
+            const confirmDownload = window.confirm(`This link looks like a file: ${finalUrl.split('/').pop()}\nDo you want to download it to WeberOS?`);
+            if (confirmDownload) {
+                handleDownload(finalUrl);
+                updateTab(activeTabId, { loading: false });
+                return;
+            }
+        }
+
         if (activeTab.proxyMode && finalUrl.startsWith('http')) {
              try {
-                // Use AllOrigins as a JSONP/CORS proxy to fetch raw HTML
                 const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(finalUrl)}`);
                 const data = await res.json();
                 
                 if (data.contents) {
                      let content = data.contents;
-                     // Inject Base Tag so relative links/images work
                      const baseTag = `<base href="${finalUrl}" target="_self" />`;
-                     if (content.toLowerCase().includes('<head>')) {
-                         content = content.replace(/<head>/i, `<head>${baseTag}`);
-                     } else {
-                         content = `${baseTag}${content}`;
-                     }
+                     content = content.replace(/<head>/i, `<head>${baseTag}`);
                      
-                     // Helper script to intercept links and prevent top-frame navigation
-                     const helperScript = `
+                     // Intercept links for redirection handling
+                     const script = `
                         <script>
-                            document.addEventListener('click', function(e) {
-                                const anchor = e.target.closest('a');
-                                if(anchor && anchor.href) {
+                            document.addEventListener('click', e => {
+                                const a = e.target.closest('a');
+                                if(a && a.href) {
                                     e.preventDefault();
-                                    // Send message to parent
-                                    // This is a simplified demo; robust implementation requires postMessage
-                                    window.top.postMessage({ type: 'WIREBOX_NAV', url: anchor.href }, '*');
+                                    window.parent.postMessage({ type: 'WIREBOX_NAV', url: a.href }, '*');
                                 }
                             });
                         </script>
                      `;
-                     // We aren't fully handling the postMessage in this simplified version, 
-                     // but the base tag handles assets. 
-                     
+                     content += script;
                      updateTab(activeTabId, { loading: false, srcDoc: content });
-                } else {
-                    throw new Error("No content returned from proxy");
                 }
              } catch (e) {
-                 console.error("Proxy Error", e);
-                 updateTab(activeTabId, { 
-                     loading: false, 
-                     srcDoc: `
-                        <html>
-                        <body style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; text-align:center; padding:3rem; color:#333; background:#f8f9fa;">
-                            <div style="max-width:500px; margin:0 auto; background:white; padding:2rem; border-radius:12px; box-shadow:0 4px 12px rgba(0,0,0,0.1);">
-                                <h1 style="color:#e11d48; margin-bottom:1rem;">Proxy Error</h1>
-                                <p style="line-height:1.6; color:#4b5563;">Could not load content via Enhanced Mode.</p>
-                                <p style="background:#f1f5f9; padding:0.75rem; border-radius:6px; font-family:monospace; font-size:0.9em;">${(e as Error).message}</p>
-                                <p style="margin-top:1.5rem; font-size:0.9em; color:#64748b;">Try disabling Enhanced Mode (Shield icon) or checking your internet connection.</p>
-                            </div>
-                        </body>
-                        </html>
-                     ` 
-                 });
+                 updateTab(activeTabId, { loading: false, srcDoc: `<div style="padding:2rem;text-align:center;font-family:sans-serif;"><h2>Proxy Error</h2><p>Failed to load ${finalUrl}</p></div>` });
              }
         } else {
-             // Standard Iframe Mode
-             // Just wait a sec to simulate load, then clear srcDoc so iframe uses 'src'
-             setTimeout(() => {
-                updateTab(activeTabId, { loading: false, srcDoc: undefined });
-            }, 1000);
+             setTimeout(() => updateTab(activeTabId, { loading: false, srcDoc: undefined }), 1000);
         }
     };
 
-    const toggleProxy = () => {
-        const newVal = !activeTab.proxyMode;
-        // Update state and immediately reload page with new setting
-        setTabs(prev => prev.map(t => t.id === activeTabId ? { ...t, proxyMode: newVal } : t));
+    // Listen for messages from iframe (redirection handling)
+    useEffect(() => {
+        const handleMessage = (e: MessageEvent) => {
+            if (e.data.type === 'WIREBOX_NAV') {
+                handleNavigate(e.data.url);
+            }
+        };
+        window.addEventListener('message', handleMessage);
+        return () => window.removeEventListener('message', handleMessage);
+    }, [activeTabId, activeTab]);
+
+    const handleDownload = (url: string) => {
+        const fileName = url.split('/').pop() || 'downloaded_file';
+        let downloadsDir = user.fs;
+        for(const p of ['home', 'user', 'downloads']) {
+            if (downloadsDir.children && downloadsDir.children[p]) downloadsDir = downloadsDir.children[p];
+        }
         
-        // Hacky way to trigger reload with new mode since setTabs is async
-        setTimeout(() => {
-           const btn = document.getElementById('wb-reload-btn');
-           if(btn) btn.click();
-        }, 50);
-    };
-
-    const handleReload = () => {
-        handleNavigate(activeTab.url);
-    };
-
-    const handleBack = () => {
-        if (activeTab.historyIndex > 0) {
-            const newIndex = activeTab.historyIndex - 1;
-            const newUrl = activeTab.history[newIndex];
-            updateTab(activeTabId, { historyIndex: newIndex, url: newUrl });
-        }
-    };
-
-    const handleForward = () => {
-        if (activeTab.historyIndex < activeTab.history.length - 1) {
-            const newIndex = activeTab.historyIndex + 1;
-            const newUrl = activeTab.history[newIndex];
-            updateTab(activeTabId, { historyIndex: newIndex, url: newUrl });
+        if (downloadsDir.children) {
+            downloadsDir.children[fileName] = { type: 'file', content: `Downloaded from: ${url}` };
+            setUser({ ...user });
+            alert(`File ${fileName} saved to ~/home/user/downloads`);
         }
     };
 
     const addTab = () => {
         const id = Date.now().toString();
-        // New tabs have proxy enabled by default
-        setTabs([...tabs, { id, title: 'New Tab', url: '', loading: false, history: [''], historyIndex: 0, proxyMode: true }]);
+        setTabs([...tabs, { id, title: 'Home', url: 'weberos://home', loading: false, history: ['weberos://home'], historyIndex: 0, proxyMode: true }]);
         setActiveTabId(id);
     };
 
     const closeTab = (id: string, e: React.MouseEvent) => {
         e.stopPropagation();
-        if (tabs.length === 1) return; // Don't close last tab
+        if (tabs.length === 1) return;
         const newTabs = tabs.filter(t => t.id !== id);
         setTabs(newTabs);
         if (activeTabId === id) setActiveTabId(newTabs[newTabs.length - 1].id);
     };
 
-    if (showSettings) {
-        return (
-            <div className="h-full bg-slate-50 flex flex-col">
-                <div className="bg-slate-200 p-2 border-b border-slate-300 flex items-center">
-                    <button onClick={() => setShowSettings(false)} className="flex items-center gap-1 text-slate-600 hover:text-slate-900">
-                        <ArrowLeft size={16} /> Back to Browser
-                    </button>
-                    <span className="mx-auto font-bold text-slate-700">WireBox Settings</span>
-                </div>
-                <div className="p-8 max-w-2xl mx-auto w-full">
-                    <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                        <h3 className="font-bold mb-4 flex items-center gap-2 text-slate-800"><Search size={18}/> Search Engine</h3>
-                        <div className="space-y-2 text-slate-700">
-                            {Object.keys(SEARCH_ENGINES).map(e => (
-                                <label key={e} className="flex items-center gap-2 p-2 hover:bg-slate-50 rounded cursor-pointer">
-                                    <input 
-                                        type="radio" 
-                                        name="engine" 
-                                        checked={engine === e} 
-                                        onChange={() => setEngine(e as any)}
-                                        className="text-blue-600"
-                                    />
-                                    <span>{e}</span>
-                                </label>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-            </div>
-        );
-    }
-
-    if (activeSection === 'downloads') {
-        return (
-            <div className="h-full bg-slate-50 flex flex-col">
-                <div className="bg-slate-200 p-2 border-b border-slate-300 flex items-center justify-between">
-                     <button onClick={() => setActiveSection('browser')} className="flex items-center gap-1 text-slate-600 hover:text-slate-900">
-                        <ArrowLeft size={16} /> Back to Browser
-                    </button>
-                    <span className="font-bold text-slate-700">Downloads</span>
-                    <div className="w-16"></div>
-                </div>
-                <div className="p-8 flex items-center justify-center text-slate-400 flex-col gap-4 h-full">
-                    <Download size={48} />
-                    <span>No recent downloads</span>
-                    <span className="text-xs">Files downloaded in WireBox appear in ~/home/user/downloads</span>
-                </div>
-            </div>
-        );
-    }
-
     return (
-        <div className="h-full flex flex-col bg-slate-100">
+        <div className="h-full flex flex-col bg-slate-100 font-sans">
             {/* Tab Bar */}
-            <div className="flex items-center bg-slate-200 p-1 gap-1 overflow-x-auto">
+            <div className="flex items-center bg-slate-200 p-1 gap-1 overflow-x-auto no-scrollbar border-b border-slate-300">
                 {tabs.map(tab => (
                     <div 
                         key={tab.id}
                         onClick={() => setActiveTabId(tab.id)}
-                        className={`flex items-center gap-2 px-3 py-1.5 rounded-t-lg text-xs max-w-[160px] cursor-default transition group ${activeTabId === tab.id ? 'bg-white shadow-sm text-slate-800' : 'bg-transparent text-slate-600 hover:bg-slate-300'}`}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-t-xl text-xs min-w-[120px] max-w-[180px] cursor-pointer transition-all ${activeTabId === tab.id ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:bg-slate-300'}`}
                     >
-                        <Globe size={12} className={tab.loading ? 'animate-spin text-blue-500' : 'text-slate-400'} />
-                        <span className="truncate flex-1">{tab.title || 'New Tab'}</span>
-                        <button onClick={(e) => closeTab(tab.id, e)} className="opacity-0 group-hover:opacity-100 hover:bg-slate-200 rounded p-0.5"><X size={12}/></button>
+                        <Globe size={12} className={tab.loading ? 'animate-spin' : ''} />
+                        <span className="truncate flex-1">{tab.title}</span>
+                        <X size={12} className="hover:bg-slate-200 rounded-full p-0.5" onClick={(e) => closeTab(tab.id, e)} />
                     </div>
                 ))}
-                <button onClick={addTab} className="p-1 hover:bg-slate-300 rounded"><Plus size={14}/></button>
+                <button onClick={addTab} className="p-1.5 hover:bg-slate-300 rounded-lg text-slate-600 transition"><Plus size={14} /></button>
             </div>
 
             {/* Address Bar */}
-            <div className="bg-white p-2 border-b border-slate-200 flex items-center gap-2 shadow-sm z-10">
+            <div className="bg-white p-2 flex items-center gap-2 border-b border-slate-200 shadow-sm">
                 <div className="flex items-center gap-1">
-                    <button onClick={handleBack} disabled={activeTab.historyIndex <= 0} className="p-1.5 hover:bg-slate-100 rounded disabled:opacity-30 text-black"><ArrowLeft size={16}/></button>
-                    <button onClick={handleForward} disabled={activeTab.historyIndex >= activeTab.history.length - 1} className="p-1.5 hover:bg-slate-100 rounded disabled:opacity-30 text-black"><ArrowRight size={16}/></button>
-                    <button id="wb-reload-btn" onClick={handleReload} className="p-1.5 hover:bg-slate-100 rounded text-black"><RotateCcw size={16}/></button>
+                    <button onClick={() => activeTab.historyIndex > 0 && updateTab(activeTabId, { historyIndex: activeTab.historyIndex - 1, url: activeTab.history[activeTab.historyIndex - 1] })} className="p-1.5 hover:bg-slate-100 rounded-lg disabled:opacity-30"><ArrowLeft size={16}/></button>
+                    <button onClick={() => activeTab.historyIndex < activeTab.history.length - 1 && updateTab(activeTabId, { historyIndex: activeTab.historyIndex + 1, url: activeTab.history[activeTab.historyIndex + 1] })} className="p-1.5 hover:bg-slate-100 rounded-lg disabled:opacity-30"><ArrowRight size={16}/></button>
+                    <button onClick={() => handleNavigate(activeTab.url)} className="p-1.5 hover:bg-slate-100 rounded-lg"><RotateCcw size={16}/></button>
+                    <button onClick={() => handleNavigate('weberos://home')} className="p-1.5 hover:bg-slate-100 rounded-lg"><Home size={16}/></button>
                 </div>
+                
                 <div className="flex-1 relative group">
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition">
+                        {activeTab.proxyMode ? <Shield size={14} /> : <Globe size={14} />}
+                    </div>
                     <input 
-                        className={`w-full border border-transparent focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 rounded-full px-4 py-1.5 text-sm outline-none transition text-slate-900 ${activeTab.proxyMode ? 'bg-green-50 text-green-800' : 'bg-slate-100'}`}
+                        className="w-full bg-slate-100 border-none rounded-xl py-2 pl-9 pr-4 text-sm outline-none focus:ring-2 focus:ring-blue-500/20 transition"
                         value={urlInput}
-                        onChange={(e) => setUrlInput(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && handleNavigate(urlInput)}
-                        placeholder={`Search ${engine} or type a URL`}
+                        onChange={e => setUrlInput(e.target.value)}
+                        onKeyDown={e => e.key === 'Enter' && handleNavigate(urlInput)}
+                        placeholder="Search or enter address"
                     />
-                    {activeTab.proxyMode && (
-                        <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-green-600 pointer-events-none opacity-50 hidden sm:block">
-                            ENHANCED
-                        </div>
-                    )}
                 </div>
+
                 <div className="flex items-center gap-1">
-                    <button 
-                        onClick={toggleProxy} 
-                        className={`p-1.5 rounded transition ${activeTab.proxyMode ? 'bg-green-100 text-green-600 hover:bg-green-200 ring-2 ring-green-500/20' : 'hover:bg-slate-100 text-slate-400'}`} 
-                        title={activeTab.proxyMode ? "Enhanced Mode Enabled (Proxying)" : "Enable Enhanced Mode (Fixes blocked sites)"}
-                    >
-                        {activeTab.proxyMode ? <Shield size={18} fill="currentColor" /> : <Shield size={18} />}
+                    <button onClick={() => updateTab(activeTabId, { proxyMode: !activeTab.proxyMode })} className={`p-2 rounded-xl transition ${activeTab.proxyMode ? 'text-green-600 bg-green-50' : 'text-slate-400 hover:bg-slate-100'}`} title="Enhanced Mode (Proxy)">
+                        <Shield size={18} />
                     </button>
-                    <div className="w-px h-4 bg-slate-300 mx-1"></div>
-                    <button onClick={() => setActiveSection('downloads')} className="p-1.5 hover:bg-slate-100 rounded text-slate-600" title="Downloads"><Download size={18}/></button>
-                    <button onClick={() => setShowSettings(true)} className="p-1.5 hover:bg-slate-100 rounded text-slate-600" title="Settings"><Settings size={18}/></button>
+                    <button onClick={() => setShowSettings(!showSettings)} className="p-2 hover:bg-slate-100 rounded-xl text-slate-600 transition"><Settings size={18}/></button>
                 </div>
             </div>
 
-            {/* Content Area */}
-            <div className="flex-1 bg-white relative">
-                {activeTab.loading && (
-                    <div className="absolute top-0 left-0 right-0 h-0.5 bg-blue-100 z-20">
-                        <div className="h-full bg-blue-600 animate-progress"></div>
+            {/* Browser Area */}
+            <div className="flex-1 bg-white overflow-hidden relative">
+                {activeTab.url === 'weberos://home' ? (
+                    <div className="h-full flex flex-col items-center justify-center p-8 bg-gradient-to-b from-slate-50 to-white">
+                        <div className="w-20 h-20 bg-blue-600 rounded-3xl flex items-center justify-center text-white shadow-2xl mb-8 rotate-3">
+                            <Globe size={48} />
+                        </div>
+                        <h1 className="text-3xl font-black text-slate-900 mb-8">WireBox</h1>
+                        <div className="w-full max-w-xl relative mb-12">
+                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+                            <input 
+                                className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-lg shadow-xl shadow-slate-200/50 outline-none focus:border-blue-500 transition"
+                                placeholder={`Search with ${engine}...`}
+                                onKeyDown={e => e.key === 'Enter' && handleNavigate((e.target as HTMLInputElement).value)}
+                            />
+                        </div>
+                        <div className="grid grid-cols-4 gap-6 w-full max-w-2xl">
+                            {[
+                                { name: 'GitHub', url: 'https://github.com', color: 'bg-slate-900' },
+                                { name: 'Google', url: 'https://google.com', color: 'bg-red-500' },
+                                { name: 'DuckDuckGo', url: 'https://duckduckgo.com', color: 'bg-orange-500' },
+                                { name: 'React', url: 'https://react.dev', color: 'bg-blue-400' }
+                            ].map(site => (
+                                <button key={site.name} onClick={() => handleNavigate(site.url)} className="flex flex-col items-center gap-2 group">
+                                    <div className={`w-14 h-14 ${site.color} rounded-2xl flex items-center justify-center text-white shadow-lg group-hover:scale-110 transition`}>
+                                        <span className="text-xl font-bold">{site.name[0]}</span>
+                                    </div>
+                                    <span className="text-xs font-medium text-slate-600">{site.name}</span>
+                                </button>
+                            ))}
+                        </div>
                     </div>
-                )}
-                
-                {activeTab.url ? (
-                     <div className="w-full h-full flex flex-col bg-white relative">
-                        {activeTab.proxyMode && activeTab.srcDoc ? (
-                            <iframe 
-                                srcDoc={activeTab.srcDoc}
-                                className="w-full h-full border-none"
-                                title="Proxy Browser Content"
-                                sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals"
-                            />
-                        ) : (
-                            <iframe 
-                                src={activeTab.url} 
-                                className="w-full h-full border-none"
-                                title="Browser Content"
-                                sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals"
-                            />
-                        )}
-                        
-                        {/* Overlay for sites that refuse to connect (Only shown in Direct Mode) */}
-                        {!activeTab.proxyMode && (
-                            <div className="absolute top-0 left-0 w-full h-10 bg-yellow-50 border-b border-yellow-200 flex items-center justify-between px-4 text-xs text-yellow-800 pointer-events-none opacity-0 hover:opacity-100 transition-opacity delay-1000 duration-500 group-hover:opacity-100 z-10">
-                                 <div className="flex items-center gap-2">
-                                    <AlertTriangle size={14} />
-                                    <span>Site not loading? Try enabling Enhanced Mode (Shield Icon).</span>
-                                 </div>
-                                 <a 
-                                    href={activeTab.url} 
-                                    target="_blank" 
-                                    rel="noreferrer" 
-                                    className="pointer-events-auto bg-yellow-200 hover:bg-yellow-300 px-2 py-1 rounded font-bold"
-                                 >
-                                     Open Externally
-                                 </a>
-                            </div>
-                        )}
-                     </div>
                 ) : (
-                    <div className="w-full h-full flex flex-col items-center justify-center bg-white text-slate-900">
-                        <div className="mb-8 font-bold text-4xl text-slate-800 tracking-tight flex flex-col items-center">
-                            <Globe size={48} className="text-blue-500 mb-4" />
-                            WireBox
-                        </div>
-                        <div className="w-full max-w-md relative">
-                             <input 
-                                className="w-full bg-slate-50 border border-slate-200 hover:shadow-md focus:shadow-lg rounded-full px-6 py-3 outline-none transition text-slate-900 placeholder:text-slate-400"
-                                placeholder={`Search ${engine} or type a URL`}
-                                onChange={(e) => setUrlInput(e.target.value)}
-                                onKeyDown={(e) => {
-                                    if(e.key === 'Enter') handleNavigate((e.target as HTMLInputElement).value)
-                                }}
-                            />
-                            <Search className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
-                        </div>
-                        <div className="mt-8 text-slate-400 text-xs flex items-center gap-2">
-                            <Shield size={12} />
-                            <span>Enhanced Mode enabled by default</span>
-                        </div>
-                    </div>
+                    <iframe 
+                        src={activeTab.srcDoc ? undefined : activeTab.url}
+                        srcDoc={activeTab.srcDoc}
+                        className="w-full h-full border-none"
+                        title="WireBox View"
+                    />
                 )}
             </div>
         </div>
