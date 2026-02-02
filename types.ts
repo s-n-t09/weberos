@@ -18,11 +18,13 @@ export type WindowState = {
   data?: any;
 };
 
+export type SystemPermission = 'notifications' | 'camera' | 'microphone' | 'geolocation' | 'filesystem';
+
 export type CustomApp = {
     id: string;
     name: string;
     iconName: string;
-    permissions?: string[];
+    permissions?: SystemPermission[];
     code: string; 
 };
 
