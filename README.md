@@ -3,7 +3,7 @@
   <a href="https://github.com/s-n-t09/weberos">
     <img src="/logo.png" alt="WeberOS Logo" width="125" height="125">
   </a>
-  <h1 align="center">WeberOS</h1>
+  <h1 align="center">WeberOS v1.5</h1>
 
   <p align="center">
     <strong>Next-Gen Web-Based Operating System Simulator</strong>
@@ -35,6 +35,7 @@
 - [Usage Guide](#-usage-guide)
 - [Project Structure](#-project-structure)
 - [Developer Guide](#-developer-guide)
+- [API Permissions](#-api-permissions)
 - [License](#-license)
 
 ---
@@ -169,6 +170,30 @@ WeberOS supports a unique feature called **Weber Runtime (.wbr)**. You can write
 ```
 
 Open this file in **WeberOS Explorer** to install and run it!
+
+---
+
+## 🛡️ API Permissions (v1.5)
+
+In version 1.5, you can request system permissions in your `.wbr` manifest to access advanced features.
+
+| Permission | Description | API Access |
+| :--- | :--- | :--- |
+| `notifications` | Send system and browser notifications | `Sys.notify(title, message)` |
+| `camera` | Access the user's camera | `Sys.requestCamera()` |
+| `microphone` | Access the user's microphone | `Sys.requestMic()` |
+| `geolocation` | Access real-time location | `Sys.getLocation()` |
+
+**Example with permissions:**
+```json
+{
+  "id": "secure-app",
+  "name": "Secure App",
+  "icon": "Shield",
+  "permissions": ["notifications", "camera"],
+  "code": "return () => React.createElement('button', { onClick: () => Sys.notify('Hello', 'Permission granted!') }, 'Notify Me')"
+}
+```
 
 ---
 
