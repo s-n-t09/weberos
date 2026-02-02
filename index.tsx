@@ -16,20 +16,18 @@ import {
     Upload, 
     Package, 
     Globe, 
-    Ghost, 
-    Monitor, 
     LayoutGrid, 
     LogOut, 
-    ArrowLeft as ArrowBack, 
-    UserPlus, 
     Search, 
-    Wifi, 
-    Battery, 
-    VolumeX, 
-    Volume1, 
     Volume2,
     Film,
-    Bell
+    Bell,
+    ChevronRight,
+    ArrowLeft,
+    Plus,
+    Lock,
+    Key,
+    Shield
 } from 'lucide-react';
 
 import { UserProfile, WindowState, FileSystemNode, SystemNotification } from './types';
@@ -66,6 +64,10 @@ const SYSTEM_REGISTRY: Record<string, { name: string, icon: any, color: string }
 };
 
 const WeberOS = () => {
+  const [booting, setBooting] = useState(true);
+  const [bootProgress, setBootProgress] = useState(0);
+  const [bootStatus, setBootStatus] = useState('Initializing WeberOS 1.5...');
+
   const [user, setUserState] = useState<UserProfile | null>(null);
   const [usersList, setUsersList] = useState<UserProfile[]>([]);
   const [selectedProfile, setSelectedProfile] = useState<UserProfile | null>(null);
@@ -79,22 +81,40 @@ const WeberOS = () => {
   const [startOpen, setStartOpen] = useState(false);
   const [time, setTime] = useState(new Date());
 
-  // Volume Controller
   const [volume, setVolume] = useState(70);
   const [showVolumePopup, setShowVolumePopup] = useState(false);
 
-  // Notifications
   const [notifications, setNotifications] = useState<SystemNotification[]>([]);
   const [showNotifPanel, setShowNotifPanel] = useState(false);
 
-  // File Picking State
   const [openWithRequest, setOpenWithRequest] = useState<{file: string, apps: any[]} | null>(null);
 
-  // Desktop Drag State
-  const [draggingIcon, setDraggingIcon] = useState<string | null>(null);
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  // Boot Animation Logic
+  useEffect(() => {
+    const steps = [
+        { p: 10, s: 'Loading Kernel...' },
+        { p: 30, s: 'Mounting Virtual Filesystem...' },
+        { p: 50, s: 'Loading System Registries...' },
+        { p: 70, s: 'Starting Window Manager...' },
+        { p: 90, s: 'Preparing User Interface...' },
+        { p: 100, s: 'Ready.' }
+    ];
+    
+    let currentStep = 0;
+    const interval = setInterval(() => {
+        if (currentStep < steps.length) {
+            setBootProgress(steps[currentStep].p);
+            setBootStatus(steps[currentStep].s);
+            currentStep++;
+        } else {
+            clearInterval(interval);
+            setTimeout(() => setBooting(false), 800);
+        }
+    }, 600);
+    
+    return () => clearInterval(interval);
+  }, []);
 
-  // Load Users
   useEffect(() => {
       const db = JSON.parse(localStorage.getItem('weberos_users') || '{}');
       setUsersList(Object.values(db));
@@ -213,7 +233,6 @@ const WeberOS = () => {
       };
       setNotifications(prev => [newNotif, ...prev]);
 
-      // External Browser Notification
       if (user.settings.notifications.external && 'Notification' in window) {
           if (Notification.permission === 'granted') {
               new Notification(title, { body: message });
@@ -225,6 +244,94 @@ const WeberOS = () => {
               });
           }
       }
+  };
+
+  const openApp = (appId: string, data?: any) => {
+    setStartOpen(false);
+    const existing = windows.find(w => w.appId === appId && !data);
+    if (existing) {
+        focusWindow(existing.id);
+        if (existing.isMinimized) toggleMinimize(existing.id);
+        return;
+    }
+
+    const app = SYSTEM_REGISTRY[appId] || (user?.customApps[appId] ? { name: user.customApps[appId].name } : null);
+    if (!app && appId !== 'upload_files') return;
+
+    if (appId === 'upload_files') {
+        document.getElementById('hidden-file-input')?.click();
+        return;
+    }
+
+    const newWin: WindowState = {
+      id: Math.random().toString(36).substring(7),
+      appId,
+      title: app?.name || 'App',
+      isMinimized: false,
+      isMaximized: false,
+      zIndex: Math.max(0, ...windows.map(w => w.zIndex)) + 1,
+      position: { x: 50 + (windows.length * 30), y: 50 + (windows.length * 30) },
+      size: { w: 800, h: 550 },
+      data
+    };
+    setWindows([...windows, newWin]);
+    setActiveWinId(newWin.id);
+  };
+
+  const closeWindow = (id: string) => {
+    setWindows(windows.filter(w => w.id !== id));
+    if (activeWinId === id) setActiveWinId(null);
+  };
+
+  const focusWindow = (id: string) => {
+    setActiveWinId(id);
+    setWindows(windows.map(w => w.id === id ? { ...w, zIndex: Math.max(0, ...windows.map(win => win.zIndex)) + 1 } : w));
+  };
+
+  const toggleMinimize = (id: string) => {
+    setWindows(windows.map(w => w.id === id ? { ...w, isMinimized: !w.isMinimized } : w));
+    if (activeWinId === id) setActiveWinId(null);
+    else setActiveWinId(id);
+  };
+
+  const toggleMaximize = (id: string) => {
+    setWindows(windows.map(w => w.id === id ? { ...w, isMaximized: !w.isMaximized } : w));
+  };
+
+  const moveWindow = (id: string, x: number, y: number) => {
+    setWindows(windows.map(w => w.id === id ? { ...w, position: { x, y } } : w));
+  };
+
+  const resizeWindow = (id: string, w: number, h: number) => {
+    setWindows(windows.map(win => win.id === id ? { ...win, size: { w, h } } : win));
+  };
+
+  const launchFile = (path: string) => {
+      const ext = path.split('.').pop()?.toLowerCase() || '';
+      const defaultApp = user?.settings.defaultApps[ext] || FILE_ASSOCIATIONS[ext]?.[0];
+      
+      if (defaultApp) {
+          openApp(defaultApp, { file: path });
+      } else {
+          setOpenWithRequest({ file: path, apps: (FILE_ASSOCIATIONS[ext] || DEFAULT_APPS).map(id => ({ id, ...SYSTEM_REGISTRY[id] })) });
+      }
+  };
+
+  const openFilePicker = (callback: (path: string) => void) => {
+      const id = Math.random().toString(36).substring(7);
+      const pickerWin: WindowState = {
+          id,
+          appId: 'explorer',
+          title: 'Select File',
+          isMinimized: false,
+          isMaximized: false,
+          zIndex: Math.max(0, ...windows.map(w => w.zIndex)) + 1,
+          position: { x: 100, y: 100 },
+          size: { w: 600, h: 400 },
+          data: { mode: 'picker', onPickCallback: callback }
+      };
+      setWindows([...windows, pickerWin]);
+      setActiveWinId(id);
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -279,245 +386,138 @@ const WeberOS = () => {
                      color: 'bg-indigo-600'
                  };
              }
-             const repoPkg = REPO_PACKAGES.find(p => p.name === id);
-             if (repoPkg) {
-                 let icon = Package;
-                 let color = 'bg-gray-500';
-                 if (id === 'browser') { icon = Globe; color = 'bg-indigo-500'; }
-                 if (id === 'music') { icon = Music; color = 'bg-pink-500'; }
-                 if (id === 'doom') { icon = Ghost; color = 'bg-red-800'; }
-                 if (id === 'matrix') { icon = Monitor; color = 'bg-green-900'; }
-                 return { id, name: repoPkg.name, icon, color };
-             }
-             return { id, name: id, icon: Package, color: 'bg-slate-500' };
+             return { id, name: id, icon: Package, color: 'bg-gray-500' };
          }) : [])
   ];
 
-  // SORT ALPHABETICALLY for Start Menu
-  const sortedApps = [...availableApps].sort((a, b) => a.name.localeCompare(b.name));
+  const sortedApps = availableApps.sort((a, b) => a.name.localeCompare(b.name));
 
-  const openApp = (appId: string, data?: any) => {
-    if (appId === 'upload_files') {
-        document.getElementById('hidden-file-input')?.click();
-        return;
-    }
+  // Boot Screen
+  if (booting) {
+      return (
+          <div className="h-screen w-screen bg-black flex flex-col items-center justify-center text-white font-sans">
+              <div className="relative mb-8">
+                  <img src="/logo.png" alt="WeberOS" className="w-24 h-24 animate-pulse" />
+                  <div className="absolute inset-0 rounded-full border-4 border-blue-500/20 border-t-blue-500 animate-spin"></div>
+              </div>
+              <h1 className="text-2xl font-bold tracking-widest mb-2">WeberOS</h1>
+              <div className="w-64 h-1 bg-white/10 rounded-full overflow-hidden mb-4">
+                  <div className="h-full bg-blue-500 transition-all duration-300" style={{ width: `${bootProgress}%` }}></div>
+              </div>
+              <p className="text-xs text-slate-500 font-mono uppercase tracking-tighter">{bootStatus}</p>
+          </div>
+      );
+  }
 
-    const systemApp = SYSTEM_REGISTRY[appId];
-    const customApp = user?.customApps[appId];
-    const repoApp = REPO_PACKAGES.find(p => p.name === appId); 
-    
-    let title = appId;
-    if (systemApp) title = systemApp.name;
-    else if (customApp) title = customApp.name;
-    else if (repoApp) title = repoApp.name;
-
-    setStartOpen(false);
-
-    const isMobile = window.innerWidth < 640;
-    const defaultWidth = isMobile ? window.innerWidth - 32 : 800;
-    const defaultHeight = isMobile ? 400 : 500;
-    const defaultX = isMobile ? 16 : 80 + (windows.length * 30);
-    const defaultY = isMobile ? 80 + (windows.length * 30) : 50 + (windows.length * 30);
-
-    const id = Date.now().toString();
-    const newWindow: WindowState = {
-        id,
-        appId,
-        title: title,
-        isMinimized: false,
-        isMaximized: false,
-        zIndex: windows.length + 1,
-        position: { x: defaultX, y: defaultY },
-        size: { w: defaultWidth, h: defaultHeight },
-        data: data
-    };
-    setWindows([...windows, newWindow]);
-    setActiveWinId(id);
-  };
-
-  const closeWindow = (id: string) => setWindows(windows.filter(w => w.id !== id));
-
-  const focusWindow = (id: string) => {
-      setActiveWinId(id);
-      setWindows(prev => prev.map(w => w.id === id ? { ...w, zIndex: 100 } : { ...w, zIndex: w.zIndex < 100 ? w.zIndex : w.zIndex - 1 }).sort((a,b) => a.zIndex - b.zIndex).map((w, i) => ({...w, zIndex: i + 1})));
-  };
-
-  const toggleMaximize = (id: string) => setWindows(windows.map(w => w.id === id ? { ...w, isMaximized: !w.isMaximized } : w));
-  const toggleMinimize = (id: string) => setWindows(windows.map(w => w.id === id ? { ...w, isMinimized: !w.isMinimized } : w));
-  const moveWindow = (id: string, x: number, y: number) => {
-      const safeX = Math.max(-50, Math.min(window.innerWidth - 50, x));
-      const safeY = Math.max(0, Math.min(window.innerHeight - 50, y));
-      setWindows(prev => prev.map(w => w.id === id ? { ...w, position: { x: safeX, y: safeY } } : w));
-  };
-  const resizeWindow = (id: string, w: number, h: number) => setWindows(prev => prev.map(win => win.id === id ? { ...win, size: { w, h } } : win));
-
-  const launchFile = (fullPath: string) => {
-      const ext = fullPath.split('.').pop()?.toLowerCase();
-      if(!ext) {
-          openApp('coder', { file: fullPath });
-          return;
-      }
-
-      // Check user default apps first
-      if (user?.settings.defaultApps && user.settings.defaultApps[ext]) {
-          openApp(user.settings.defaultApps[ext], { file: fullPath });
-          return;
-      }
-      
-      const appIds = FILE_ASSOCIATIONS[ext];
-      if(!appIds || appIds.length === 0) {
-          openApp('coder', { file: fullPath });
-      } else if (appIds.length === 1) {
-          openApp(appIds[0], { file: fullPath });
-      } else {
-          const validApps = appIds.map(id => availableApps.find(a => a.id === id)).filter(Boolean);
-          setOpenWithRequest({ file: fullPath, apps: validApps });
-      }
-  };
-
-  const openFilePicker = (onPick: (path: string) => void) => {
-      openApp('explorer', { mode: 'picker', onPickCallback: onPick });
-  };
-
-  const handleIconDragStart = (e: React.MouseEvent | React.TouchEvent, appId: string, currentX: number, currentY: number) => {
-      e.preventDefault();
-      const clientX = 'touches' in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
-      const clientY = 'touches' in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
-      setDraggingIcon(appId);
-      setDragOffset({ x: clientX - currentX, y: clientY - currentY });
-  };
-
-  useEffect(() => {
-      if (draggingIcon && user) {
-          const handleMove = (e: MouseEvent | TouchEvent) => {
-              const clientX = 'touches' in e ? e.touches[0].clientX : (e as MouseEvent).clientX;
-              const clientY = 'touches' in e ? e.touches[0].clientY : (e as MouseEvent).clientY;
-              const newX = clientX - dragOffset.x;
-              const newY = clientY - dragOffset.y;
-              
-              setUser({
-                  ...user,
-                  settings: {
-                      ...user.settings,
-                      desktopIcons: {
-                          ...user.settings.desktopIcons,
-                          [draggingIcon]: { x: newX, y: newY }
-                      }
-                  }
-              });
-          };
-          const handleUp = () => setDraggingIcon(null);
-
-          window.addEventListener('mousemove', handleMove);
-          window.addEventListener('mouseup', handleUp);
-          window.addEventListener('touchmove', handleMove, { passive: false });
-          window.addEventListener('touchend', handleUp);
-
-          return () => {
-              window.removeEventListener('mousemove', handleMove);
-              window.removeEventListener('mouseup', handleUp);
-              window.removeEventListener('touchmove', handleMove);
-              window.removeEventListener('touchend', handleUp);
-          };
-      }
-  }, [draggingIcon, dragOffset, user]);
-
-
+  // New Login Screen
   if (!user) {
       return (
-          <div 
-            className="h-screen w-screen bg-slate-900 flex items-center justify-center font-sans text-white"
-            style={{ backgroundColor: '#0f172a', width: '100vw', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-          >
-              <div className="bg-slate-800/50 p-8 rounded-2xl shadow-2xl backdrop-blur-xl border border-slate-700 w-full max-w-md mx-4">
-                      <div className="flex flex-col items-center mb-8">
-                          <div className="w-16 h-16 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg mb-4 overflow-hidden">
-                              <img src="/logo.png" alt="WeberOS Logo" className="w-full h-full object-contain p-2" />
+          <div className="h-screen w-screen bg-slate-950 flex items-center justify-center font-sans overflow-hidden relative">
+              {/* Animated Background Blobs */}
+              <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-600/20 rounded-full blur-[120px] animate-pulse"></div>
+              <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-purple-600/20 rounded-full blur-[120px] animate-pulse" style={{ animationDelay: '1s' }}></div>
+
+              <div className="z-10 w-full max-w-md p-8">
+                  {!selectedProfile && !createMode ? (
+                      <div className="space-y-6 animate-in fade-in zoom-in duration-500">
+                          <div className="text-center space-y-2">
+                              <h1 className="text-4xl font-black text-white tracking-tight">Welcome</h1>
+                              <p className="text-slate-400">Select a profile to continue to WeberOS</p>
                           </div>
-                          <h1 className="text-2xl font-bold text-center">WeberOS v1.4</h1>
-                      </div>
+                          
+                          <div className="grid grid-cols-1 gap-3 max-h-64 overflow-y-auto pr-2 custom-scrollbar">
+                              {usersList.map(u => (
+                                  <button 
+                                      key={u.username}
+                                      onClick={() => setSelectedProfile(u)}
+                                      className="flex items-center gap-4 p-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl transition group"
+                                  >
+                                      <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center text-white font-bold text-lg shadow-lg group-hover:scale-110 transition">
+                                          {u.username.substring(0,2).toUpperCase()}
+                                      </div>
+                                      <div className="flex-1 text-left">
+                                          <div className="text-white font-bold">{u.username}</div>
+                                          <div className="text-xs text-slate-500">Click to sign in</div>
+                                      </div>
+                                      <ChevronRight className="text-slate-600 group-hover:text-white transition" size={20} />
+                                  </button>
+                              ))}
+                          </div>
 
-                  {!createMode && !selectedProfile && (
-                      <div className="grid grid-cols-2 gap-4 mb-6 max-h-60 overflow-y-auto p-1">
-                           {usersList.map(u => (
-                               <button 
-                                   key={u.username}
-                                   onClick={() => setSelectedProfile(u)}
-                                   className="flex flex-col items-center p-4 bg-slate-800 hover:bg-slate-700 rounded-xl transition group border border-slate-700 hover:border-blue-500"
-                               >
-                                   <div className="w-12 h-12 bg-slate-600 rounded-full flex items-center justify-center text-lg font-bold mb-2 group-hover:scale-110 transition">
-                                       {u.username.substring(0,2).toUpperCase()}
-                                   </div>
-                                   <span className="text-sm font-medium truncate w-full text-center">{u.username}</span>
-                               </button>
-                           ))}
-                           <button 
-                               onClick={() => setCreateMode(true)}
-                               className="flex flex-col items-center p-4 bg-slate-800/50 hover:bg-slate-700 rounded-xl transition border border-dashed border-slate-600 hover:border-slate-400 group"
-                           >
-                               <div className="w-12 h-12 rounded-full flex items-center justify-center mb-2 text-slate-400 group-hover:text-white">
-                                   <UserPlus size={24} />
-                               </div>
-                               <span className="text-sm text-slate-400 group-hover:text-white">Add Profile</span>
-                           </button>
+                          <button 
+                              onClick={() => setCreateMode(true)}
+                              className="w-full flex items-center justify-center gap-2 p-4 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-2xl transition shadow-xl shadow-blue-900/20"
+                          >
+                              <Plus size={20} /> Create New Profile
+                          </button>
                       </div>
-                  )}
-
-                  {selectedProfile && (
-                      <div>
-                          <div className="flex items-center gap-4 mb-6">
-                              <button onClick={() => { setSelectedProfile(null); setPasswordInput(''); }} className="p-2 hover:bg-white/10 rounded-full transition"><ArrowBack size={20}/></button>
-                              <div className="flex items-center gap-3">
-                                  <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center font-bold">
-                                      {selectedProfile.username.substring(0,2).toUpperCase()}
-                                  </div>
-                                  <span className="text-xl font-bold">{selectedProfile.username}</span>
+                  ) : selectedProfile ? (
+                      <div className="space-y-6 animate-in slide-in-from-right duration-300">
+                          <button onClick={() => setSelectedProfile(null)} className="text-slate-400 hover:text-white flex items-center gap-2 transition">
+                              <ArrowLeft size={18} /> Back
+                          </button>
+                          <div className="text-center">
+                              <div className="w-24 h-24 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-3xl flex items-center justify-center text-white font-black text-3xl shadow-2xl mx-auto mb-4 rotate-3">
+                                  {selectedProfile.username.substring(0,2).toUpperCase()}
                               </div>
+                              <h2 className="text-2xl font-bold text-white">{selectedProfile.username}</h2>
                           </div>
                           <div className="space-y-4">
-                              <input 
-                                  type="password"
-                                  placeholder="Password (if set)"
-                                  value={passwordInput}
-                                  onChange={e => setPasswordInput(e.target.value)}
-                                  onKeyDown={e => e.key === 'Enter' && handleLogin()}
-                                  className="w-full bg-slate-900 border border-slate-600 rounded p-3 focus:border-blue-500 outline-none transition"
-                                  autoFocus
-                              />
+                              <div className="relative">
+                                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+                                  <input 
+                                      type="password" 
+                                      placeholder="Enter Password"
+                                      autoFocus
+                                      value={passwordInput}
+                                      onChange={e => setPasswordInput(e.target.value)}
+                                      onKeyDown={e => e.key === 'Enter' && handleLogin()}
+                                      className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 pl-12 text-white focus:border-blue-500 outline-none transition"
+                                  />
+                              </div>
                               <button 
                                   onClick={handleLogin}
-                                  className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg transition shadow-lg shadow-blue-900/20"
+                                  className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-2xl transition shadow-xl shadow-blue-900/20"
                               >
-                                  Login
+                                  Sign In
                               </button>
                           </div>
                       </div>
-                  )}
-
-                  {createMode && (
-                      <div>
-                          <div className="flex items-center gap-2 mb-6">
-                              <button onClick={() => { setCreateMode(false); setUsernameInput(''); setPasswordInput(''); }} className="p-2 hover:bg-white/10 rounded-full transition"><ArrowBack size={20}/></button>
-                              <h2 className="text-xl font-bold">Create Profile</h2>
+                  ) : (
+                      <div className="space-y-6 animate-in slide-in-from-right duration-300">
+                          <button onClick={() => setCreateMode(false)} className="text-slate-400 hover:text-white flex items-center gap-2 transition">
+                              <ArrowLeft size={18} /> Back
+                          </button>
+                          <div className="text-center">
+                              <div className="w-16 h-16 bg-slate-800 rounded-2xl flex items-center justify-center text-blue-500 mx-auto mb-4">
+                                  <User size={32} />
+                              </div>
+                              <h2 className="text-2xl font-bold text-white">New Profile</h2>
                           </div>
                           <div className="space-y-4">
-                              <input 
-                                  placeholder="Username"
-                                  value={usernameInput}
-                                  onChange={e => setUsernameInput(e.target.value)}
-                                  className="w-full bg-slate-900 border border-slate-600 rounded p-3 focus:border-blue-500 outline-none transition"
-                              />
-                              <input 
-                                  type="password"
-                                  placeholder="Password (optional)"
-                                  value={passwordInput}
-                                  onChange={e => setPasswordInput(e.target.value)}
-                                  className="w-full bg-slate-900 border border-slate-600 rounded p-3 focus:border-blue-500 outline-none transition"
-                              />
+                              <div className="relative">
+                                  <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+                                  <input 
+                                      placeholder="Username"
+                                      value={usernameInput}
+                                      onChange={e => setUsernameInput(e.target.value)}
+                                      className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 pl-12 text-white focus:border-blue-500 outline-none transition"
+                                  />
+                              </div>
+                              <div className="relative">
+                                  <Key className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+                                  <input 
+                                      type="password"
+                                      placeholder="Password (optional)"
+                                      value={passwordInput}
+                                      onChange={e => setPasswordInput(e.target.value)}
+                                      className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 pl-12 text-white focus:border-blue-500 outline-none transition"
+                                  />
+                              </div>
                               <button 
                                   onClick={handleCreateProfile}
                                   disabled={!usernameInput}
-                                  className="w-full bg-green-600 hover:bg-green-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3 rounded-lg transition shadow-lg shadow-green-900/20"
+                                  className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold py-4 rounded-2xl transition shadow-xl shadow-blue-900/20"
                               >
                                   Create User
                               </button>
@@ -539,10 +539,8 @@ const WeberOS = () => {
         }}
         onClick={() => { setShowVolumePopup(false); setShowNotifPanel(false); setStartOpen(false); }}
     >
-        {/* Hidden File Input for Uploads */}
         <input type="file" id="hidden-file-input" onChange={handleFileUpload} className="hidden" />
 
-        {/* Open With Modal */}
         {openWithRequest && (
             <OpenWithDialog 
                 apps={openWithRequest.apps} 
@@ -555,25 +553,20 @@ const WeberOS = () => {
         )}
 
         {/* Desktop Icons */}
-        {availableApps.filter(app => app.id !== 'settings' && app.id !== 'helper' && app.id !== 'wepic' && app.id !== 'weplayer').map((app, index) => {
-            const pos = user.settings.desktopIcons[app.id] || { x: 16, y: 16 + (index * 96) };
-            
-            return (
+        <div className="p-4 grid grid-flow-col grid-rows-[repeat(auto-fill,96px)] gap-4 h-[calc(100%-80px)] w-fit">
+            {availableApps.filter(app => !['settings', 'helper', 'wepic', 'weplayer'].includes(app.id)).map((app) => (
                 <div 
                     key={app.id} 
-                    style={{ position: 'absolute', left: pos.x, top: pos.y, cursor: 'grab' }}
-                    onMouseDown={(e) => handleIconDragStart(e, app.id, pos.x, pos.y)}
-                    onTouchStart={(e) => handleIconDragStart(e, app.id, pos.x, pos.y)}
                     onDoubleClick={() => openApp(app.id)}
-                    className="group flex flex-col items-center gap-1 w-20 text-white p-2 rounded transition hover:bg-white/10 active:cursor-grabbing"
+                    className="group flex flex-col items-center gap-1 w-20 text-white p-2 rounded transition hover:bg-white/10 active:scale-95 cursor-pointer"
                 >
-                    <div className={`w-12 h-12 ${app.color} rounded-xl shadow-lg flex items-center justify-center group-hover:scale-105 transition pointer-events-none`}>
+                    <div className={`w-12 h-12 ${app.color} rounded-2xl shadow-lg flex items-center justify-center group-hover:scale-105 transition`}>
                         <app.icon size={24} />
                     </div>
-                    <span className="text-xs font-medium drop-shadow-md bg-black/20 px-2 rounded-full truncate w-full text-center pointer-events-none">{app.name}</span>
+                    <span className="text-[10px] font-medium drop-shadow-md bg-black/40 px-2 py-0.5 rounded-full truncate w-full text-center">{app.name}</span>
                 </div>
-            );
-        })}
+            ))}
+        </div>
 
         {/* Windows */}
         {windows.map(win => {
@@ -599,16 +592,11 @@ const WeberOS = () => {
             else if (win.appId === 'helper') AppContent = <HelperApp />;
             else if (win.appId === 'wepic') AppContent = <WePicApp fs={fs} launchData={win.data} openFilePicker={openFilePicker} />;
             else if (win.appId === 'weplayer') AppContent = <WePlayerApp fs={fs} launchData={win.data} openFilePicker={openFilePicker} volume={volume} />;
-            else if (win.appId === 'wirebox') AppContent = <WireBoxApp user={user} setUser={setUser} />;
+            else if (win.appId === 'wirebox') AppContent = <WireBoxApp user={user} setUser={setUser} openApp={openApp} />;
             
             else if (user.customApps[win.appId]) {
                 AppContent = <DynamicAppRuntime app={user.customApps[win.appId]} onNotify={sendNotification} />;
             }
-            
-            else if (win.appId === 'browser') AppContent = <div className="h-full bg-white flex items-center justify-center text-slate-500">Use WireBox instead!</div>;
-            else if (win.appId === 'music') AppContent = <div className="h-full bg-gray-900 flex items-center justify-center text-pink-500">Music Player Placeholder</div>;
-            else if (win.appId === 'doom') AppContent = <div className="h-full bg-black flex items-center justify-center text-red-600 font-bold font-mono text-2xl">DOOM IS RUNNING...</div>;
-            else if (win.appId === 'matrix') AppContent = <div className="h-full bg-black flex items-center justify-center text-green-500 font-mono">Wake up, Neo...</div>;
             else AppContent = <div className="h-full flex items-center justify-center">Unknown App</div>;
 
             const icon = availableApps.find(a => a.id === win.appId)?.icon || Package;
@@ -624,9 +612,9 @@ const WeberOS = () => {
                     onFocus={() => focusWindow(win.id)}
                     onMove={(x: number, y: number) => moveWindow(win.id, x, y)}
                     onResize={(w: number, h: number) => resizeWindow(win.id, w, h)}
-                    icon={icon} // Pass icon to WindowFrame for title bar
+                    icon={icon}
                 >
-                    {React.cloneElement(AppContent, { icon })}
+                    {AppContent}
                 </WindowFrame>
             );
         })}
@@ -634,54 +622,51 @@ const WeberOS = () => {
         {/* Start Menu */}
         {startOpen && (
             <div 
-                className="fixed bottom-[84px] left-4 w-80 bg-slate-900/95 backdrop-blur-xl border border-slate-700 rounded-lg shadow-2xl overflow-hidden z-[200]"
+                className="fixed bottom-20 left-4 w-80 bg-slate-900/95 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-[200] animate-in slide-in-from-bottom-4 duration-200"
                 onClick={(e) => e.stopPropagation()}
             >
-                <div className="p-4 bg-slate-800/50 border-b border-slate-700 flex items-center gap-3">
-                    <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold">
+                <div className="p-4 bg-white/5 border-b border-white/10 flex items-center gap-3">
+                    <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold shadow-lg">
                         {user.username.substring(0,2).toUpperCase()}
                     </div>
                     <div className="flex-1">
                         <div className="font-bold text-white text-sm">{user.username}</div>
+                        <div className="text-[10px] text-blue-400 flex items-center gap-1"><Shield size={10}/> Standard User</div>
                     </div>
-                    <button onClick={handleLogout} className="p-2 hover:bg-red-500/20 text-slate-400 hover:text-red-400 rounded transition"><LogOut size={16}/></button>
+                    <button onClick={handleLogout} className="p-2 hover:bg-red-500/20 text-slate-400 hover:text-red-400 rounded-xl transition"><LogOut size={16}/></button>
                 </div>
-                <div className="p-2 grid grid-cols-1 gap-1 max-h-80 overflow-y-auto">
+                <div className="p-3 grid grid-cols-1 gap-1 max-h-80 overflow-y-auto custom-scrollbar">
                     {sortedApps.map(app => (
-                        <button key={app.id} onClick={() => openApp(app.id)} className="flex items-center gap-3 p-2 hover:bg-white/5 rounded text-left text-slate-200 transition">
-                            <div className={`p-1.5 rounded ${app.color}`}>
+                        <button key={app.id} onClick={() => openApp(app.id)} className="flex items-center gap-3 p-2 hover:bg-white/10 rounded-xl text-left text-slate-200 transition group">
+                            <div className={`p-2 rounded-xl ${app.color} shadow-lg group-hover:scale-110 transition`}>
                                 <app.icon size={16} className="text-white"/>
                             </div>
-                            <span className="text-sm">{app.name}</span>
+                            <span className="text-sm font-medium">{app.name}</span>
                         </button>
                     ))}
                 </div>
             </div>
         )}
 
-        {/* Volume Popup */}
-        {showVolumePopup && (
-            <VolumePopup volume={volume} setVolume={setVolume} />
-        )}
+        {showVolumePopup && <VolumePopup volume={volume} setVolume={setVolume} />}
 
-        {/* Notifications Panel */}
         {showNotifPanel && (
             <div 
-                className="fixed bottom-20 right-2 w-80 max-h-96 bg-slate-900/95 backdrop-blur border border-slate-700 rounded-xl flex flex-col z-[210] shadow-2xl" 
+                className="fixed bottom-20 right-4 w-80 max-h-96 bg-slate-900/95 backdrop-blur-2xl border border-white/10 rounded-2xl flex flex-col z-[210] shadow-2xl animate-in slide-in-from-right-4 duration-200" 
                 onClick={(e) => e.stopPropagation()}
             >
-                <div className="p-3 border-b border-slate-700 flex justify-between items-center text-white">
+                <div className="p-4 border-b border-white/10 flex justify-between items-center text-white">
                     <span className="font-bold">Notifications</span>
                     {notifications.length > 0 && <button onClick={() => setNotifications([])} className="text-xs text-blue-400 hover:text-blue-300">Clear All</button>}
                 </div>
-                <div className="flex-1 overflow-y-auto p-2 space-y-2">
+                <div className="flex-1 overflow-y-auto p-2 space-y-2 custom-scrollbar">
                     {notifications.length === 0 ? (
-                        <div className="text-center text-slate-500 py-8 text-sm">No new notifications</div>
+                        <div className="text-center text-slate-500 py-12 text-sm">No new notifications</div>
                     ) : (
                         notifications.map(notif => (
-                            <div key={notif.id} className="bg-white/5 p-3 rounded-lg border border-white/5 hover:bg-white/10 transition">
+                            <div key={notif.id} className="bg-white/5 p-3 rounded-xl border border-white/5 hover:bg-white/10 transition">
                                 <div className="flex justify-between items-start mb-1">
-                                    <span className="text-xs font-bold text-blue-400 uppercase">{notif.app}</span>
+                                    <span className="text-[10px] font-bold text-blue-400 uppercase tracking-wider">{notif.app}</span>
                                     <span className="text-[10px] text-slate-500">{new Date(notif.timestamp).toLocaleTimeString()}</span>
                                 </div>
                                 <div className="font-bold text-sm text-slate-200">{notif.title}</div>
@@ -694,62 +679,55 @@ const WeberOS = () => {
         )}
 
         {/* Taskbar */}
-        <div className="fixed bottom-2 left-2 right-2 h-16 bg-slate-900/80 backdrop-blur-xl border border-white/10 rounded-2xl flex items-center px-4 md:px-6 justify-between z-[150] shadow-2xl">
-            <div className="flex items-center gap-4">
+        <div className="fixed bottom-4 left-4 right-4 h-14 bg-slate-900/80 backdrop-blur-2xl border border-white/10 rounded-2xl flex items-center px-4 justify-between z-[150] shadow-2xl">
+            <div className="flex items-center gap-2">
                 <button 
                     onClick={(e) => { e.stopPropagation(); setStartOpen(!startOpen); setShowVolumePopup(false); setShowNotifPanel(false); }}
-                    className={`p-2 rounded transition ${startOpen ? 'bg-white/20' : 'hover:bg-white/10'}`}
+                    className={`p-2 rounded-xl transition ${startOpen ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-slate-400 hover:bg-white/10 hover:text-white'}`}
                 >
-                    <LayoutGrid size={20} className="text-white" />
+                    <LayoutGrid size={20} />
                 </button>
                 
-                <div className="hidden md:flex items-center bg-white/5 border border-white/10 rounded-full px-3 py-1.5 gap-2 w-48 hover:bg-white/10 transition cursor-text">
-                    <Search size={14} className="text-slate-400" />
-                    <span className="text-xs text-slate-400">Type here to search</span>
-                </div>
+                <div className="h-6 w-px bg-white/10 mx-1"></div>
 
-                <div className="h-6 w-px bg-white/10 mx-2"></div>
-
-                <div className="flex items-center gap-1 overflow-x-auto max-w-[30vw] md:max-w-[50vw]">
+                <div className="flex items-center gap-1 overflow-x-auto max-w-[50vw] custom-scrollbar no-scrollbar">
                     {windows.map(win => {
                         const app = availableApps.find(a => a.id === win.appId);
                         const AppIcon = app ? app.icon : Package;
-                        
                         return (
                             <button 
                                 key={win.id}
-                                onClick={() => win.isMinimized ? toggleMinimize(win.id) : focusWindow(win.id)}
-                                className={`p-2 rounded transition relative group shrink-0 ${activeWinId === win.id && !win.isMinimized ? 'bg-white/10' : 'hover:bg-white/5'}`}
+                                onClick={() => toggleMinimize(win.id)}
+                                className={`h-10 px-3 rounded-xl flex items-center gap-2 transition group min-w-[40px] ${activeWinId === win.id ? 'bg-white/15 text-white' : 'text-slate-400 hover:bg-white/5'}`}
                             >
-                                <AppIcon size={20} className={activeWinId === win.id ? 'text-blue-400' : 'text-slate-400'} />
-                                {activeWinId === win.id && !win.isMinimized && <div className="absolute bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-blue-400 rounded-full"></div>}
+                                <div className={`p-1.5 rounded-lg ${app?.color || 'bg-slate-700'} shadow-sm group-hover:scale-110 transition`}>
+                                    <AppIcon size={14} className="text-white" />
+                                </div>
+                                <span className="text-xs font-medium hidden md:block max-w-[100px] truncate">{win.title}</span>
+                                {activeWinId === win.id && <div className="w-1 h-1 bg-blue-500 rounded-full absolute bottom-1 left-1/2 -translate-x-1/2"></div>}
                             </button>
-                        )
+                        );
                     })}
                 </div>
             </div>
 
-            <div className="flex items-center gap-2 md:gap-4 text-white text-xs">
-                <div className="flex items-center gap-2 md:gap-4">
-                    <Wifi size={16} className="hidden sm:block" />
-                    <button 
-                        onClick={(e) => { e.stopPropagation(); setShowVolumePopup(!showVolumePopup); setShowNotifPanel(false); }}
-                        className="p-1 hover:bg-white/10 rounded transition"
-                    >
-                         {volume === 0 ? <VolumeX size={16} /> : volume < 50 ? <Volume1 size={16} /> : <Volume2 size={16} />}
-                    </button>
-                    <button 
-                        onClick={(e) => { e.stopPropagation(); setShowNotifPanel(!showNotifPanel); setShowVolumePopup(false); }}
-                        className="p-1 hover:bg-white/10 rounded transition relative"
-                    >
-                         <Bell size={16} />
-                         {notifications.length > 0 && <span className="absolute top-0.5 right-0.5 w-2 h-2 bg-red-500 rounded-full"></span>}
-                    </button>
-                    <Battery size={16} className="hidden sm:block" />
-                </div>
-                <div className="flex flex-col items-end min-w-fit">
-                    <span className="font-medium">{time.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
-                    <span className="text-slate-400 text-[10px] hidden xs:block">{time.toLocaleDateString()}</span>
+            <div className="flex items-center gap-2">
+                <button 
+                    onClick={(e) => { e.stopPropagation(); setShowNotifPanel(!showNotifPanel); setStartOpen(false); setShowVolumePopup(false); }}
+                    className={`p-2 rounded-xl transition relative ${showNotifPanel ? 'text-blue-400 bg-white/10' : 'text-slate-400 hover:bg-white/10'}`}
+                >
+                    <Bell size={18} />
+                    {notifications.length > 0 && <div className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-slate-900"></div>}
+                </button>
+                <button 
+                    onClick={(e) => { e.stopPropagation(); setShowVolumePopup(!showVolumePopup); setStartOpen(false); setShowNotifPanel(false); }}
+                    className={`p-2 rounded-xl transition ${showVolumePopup ? 'text-blue-400 bg-white/10' : 'text-slate-400 hover:bg-white/10'}`}
+                >
+                    <Volume2 size={18} />
+                </button>
+                <div className="flex flex-col items-end px-2 border-l border-white/10">
+                    <span className="text-xs font-bold text-white leading-none">{time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                    <span className="text-[10px] text-slate-500 font-medium">{time.toLocaleDateString([], { month: 'short', day: 'numeric' })}</span>
                 </div>
             </div>
         </div>
@@ -757,10 +735,5 @@ const WeberOS = () => {
   );
 };
 
-const container = document.getElementById('root');
-if (container) {
-    const root = createRoot(container);
-    root.render(<WeberOS />);
-} else {
-    console.error("WeberOS Fatal: Root element not found");
-}
+const root = createRoot(document.getElementById('root')!);
+root.render(<WeberOS />);
