@@ -13,6 +13,14 @@ interface Tab {
     srcDoc?: string;
 }
 
+interface DownloadItem {
+    id: string;
+    fileName: string;
+    url: string;
+    progress: number;
+    status: 'downloading' | 'completed' | 'error';
+}
+
 const SEARCH_ENGINES = {
     'DuckDuckGo': 'https://duckduckgo.com/lite/?q=',
     'Google': 'https://www.google.com/search?q=',
@@ -27,6 +35,8 @@ export const WireBoxApp = ({ user, setUser, openApp }: { user: UserProfile, setU
     const [urlInput, setUrlInput] = useState('');
     const [engine, setEngine] = useState<'DuckDuckGo' | 'Google' | 'Bing'>('DuckDuckGo');
     const [showSettings, setShowSettings] = useState(false);
+    const [downloads, setDownloads] = useState<DownloadItem[]>([]);
+    const [showDownloads, setShowDownloads] = useState(false);
 
     const activeTab = tabs.find(t => t.id === activeTabId) || tabs[0];
 
@@ -38,14 +48,15 @@ export const WireBoxApp = ({ user, setUser, openApp }: { user: UserProfile, setU
         setTabs(prevTabs => prevTabs.map(t => t.id === id ? { ...t, ...updates } : t));
     };
 
-    const handleNavigate = async (inputUrl: string) => {
-        if (!inputUrl) return;
+    const handleNavigate = async (inputUrl: string, targetTabId: string = activeTabId) => {
+        const tab = tabs.find(t => t.id === targetTabId);
+        if (!tab || !inputUrl) return;
         
         let finalUrl = inputUrl;
         let displayTitle = inputUrl;
 
         if (inputUrl === 'weberos://home') {
-            updateTab(activeTabId, { url: inputUrl, title: 'Home', loading: false, srcDoc: undefined });
+            updateTab(targetTabId, { url: inputUrl, title: 'Home', loading: false, srcDoc: undefined });
             return;
         }
 
@@ -56,8 +67,8 @@ export const WireBoxApp = ({ user, setUser, openApp }: { user: UserProfile, setU
             finalUrl = 'https://' + inputUrl;
         }
 
-        const newHistory = [...activeTab.history.slice(0, activeTab.historyIndex + 1), finalUrl];
-        updateTab(activeTabId, { 
+        const newHistory = [...tab.history.slice(0, tab.historyIndex + 1), finalUrl];
+        updateTab(targetTabId, { 
             url: finalUrl,
             loading: true,
             title: displayTitle,
@@ -66,16 +77,16 @@ export const WireBoxApp = ({ user, setUser, openApp }: { user: UserProfile, setU
         });
 
         // Simulation of link redirection and file download check
-        if (finalUrl.match(/\.(zip|pdf|exe|png|jpg|mp4|wbr)$/i)) {
+        if (finalUrl.match(/\.(zip|pdf|exe|png|jpg|jpeg|gif|mp4|mp3|wav|ogg|webm|mkv|mov|wbr)$/i)) {
             const confirmDownload = window.confirm(`This link looks like a file: ${finalUrl.split('/').pop()}\nDo you want to download it to WeberOS?`);
             if (confirmDownload) {
                 handleDownload(finalUrl);
-                updateTab(activeTabId, { loading: false });
+                updateTab(targetTabId, { loading: false });
                 return;
             }
         }
 
-        if (activeTab.proxyMode && finalUrl.startsWith('http')) {
+        if (tab.proxyMode && finalUrl.startsWith('http')) {
              try {
                 const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(finalUrl)}`);
                 const data = await res.json();
@@ -83,7 +94,12 @@ export const WireBoxApp = ({ user, setUser, openApp }: { user: UserProfile, setU
                 if (data.contents) {
                      let content = data.contents;
                      const baseTag = `<base href="${finalUrl}" target="_self" />`;
-                     content = content.replace(/<head>/i, `<head>${baseTag}`);
+                     
+                     if (content.match(/<head>/i)) {
+                         content = content.replace(/<head>/i, `<head>${baseTag}`);
+                     } else {
+                         content = `<head>${baseTag}</head>` + content;
+                     }
                      
                      // Intercept links for redirection handling
                      const script = `
@@ -92,44 +108,90 @@ export const WireBoxApp = ({ user, setUser, openApp }: { user: UserProfile, setU
                                 const a = e.target.closest('a');
                                 if(a && a.href) {
                                     e.preventDefault();
-                                    window.parent.postMessage({ type: 'WIREBOX_NAV', url: a.href }, '*');
+                                    window.parent.postMessage({ type: 'WIREBOX_NAV', url: a.href, tabId: '${targetTabId}' }, '*');
                                 }
                             });
                         </script>
                      `;
                      content += script;
-                     updateTab(activeTabId, { loading: false, srcDoc: content });
+                     updateTab(targetTabId, { loading: false, srcDoc: content });
                 }
              } catch (e) {
-                 updateTab(activeTabId, { loading: false, srcDoc: `<div style="padding:2rem;text-align:center;font-family:sans-serif;"><h2>Proxy Error</h2><p>Failed to load ${finalUrl}</p></div>` });
+                 updateTab(targetTabId, { loading: false, srcDoc: `<div style="padding:2rem;text-align:center;font-family:sans-serif;"><h2>Proxy Error</h2><p>Failed to load ${finalUrl}</p></div>` });
              }
         } else {
-             setTimeout(() => updateTab(activeTabId, { loading: false, srcDoc: undefined }), 1000);
+             setTimeout(() => updateTab(targetTabId, { loading: false, srcDoc: undefined }), 1000);
         }
     };
+
+    const handleNavigateRef = useRef(handleNavigate);
+    useEffect(() => {
+        handleNavigateRef.current = handleNavigate;
+    }, [handleNavigate]);
 
     // Listen for messages from iframe (redirection handling)
     useEffect(() => {
         const handleMessage = (e: MessageEvent) => {
             if (e.data.type === 'WIREBOX_NAV') {
-                handleNavigate(e.data.url);
+                handleNavigateRef.current(e.data.url, e.data.tabId);
             }
         };
         window.addEventListener('message', handleMessage);
         return () => window.removeEventListener('message', handleMessage);
-    }, [activeTabId, activeTab]);
+    }, []);
 
-    const handleDownload = (url: string) => {
+    const handleDownload = async (url: string) => {
         const fileName = url.split('/').pop() || 'downloaded_file';
-        let downloadsDir = user.fs;
-        for(const p of ['home', 'user', 'downloads']) {
-            if (downloadsDir.children && downloadsDir.children[p]) downloadsDir = downloadsDir.children[p];
-        }
+        const downloadId = Date.now().toString();
         
-        if (downloadsDir.children) {
-            downloadsDir.children[fileName] = { type: 'file', content: `Downloaded from: ${url}` };
-            setUser({ ...user });
-            alert(`File ${fileName} saved to ~/home/user/downloads`);
+        setDownloads(prev => [...prev, { id: downloadId, fileName, url, progress: 0, status: 'downloading' }]);
+        setShowDownloads(true);
+
+        try {
+            // Use proxy to fetch the file to avoid CORS
+            const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`);
+            if (!res.ok) throw new Error('Network response was not ok');
+            
+            const blob = await res.blob();
+            const reader = new FileReader();
+            
+            reader.onloadend = () => {
+                const base64data = reader.result as string;
+                
+                let downloadsDir = user.fs;
+                for(const p of ['home', 'user', 'downloads']) {
+                    if (!downloadsDir.children) downloadsDir.children = {};
+                    if (!downloadsDir.children[p]) {
+                        downloadsDir.children[p] = { type: 'dir', children: {} };
+                    }
+                    downloadsDir = downloadsDir.children[p];
+                }
+                
+                if (downloadsDir.children) {
+                    // Ensure unique filename
+                    let finalName = fileName;
+                    let counter = 1;
+                    while (downloadsDir.children[finalName]) {
+                        const parts = fileName.split('.');
+                        if (parts.length > 1) {
+                            const ext = parts.pop();
+                            finalName = `${parts.join('.')} (${counter}).${ext}`;
+                        } else {
+                            finalName = `${fileName} (${counter})`;
+                        }
+                        counter++;
+                    }
+
+                    downloadsDir.children[finalName] = { type: 'file', content: base64data };
+                    setUser({ ...user });
+                    
+                    setDownloads(prev => prev.map(d => d.id === downloadId ? { ...d, progress: 100, status: 'completed', fileName: finalName } : d));
+                }
+            };
+            
+            reader.readAsDataURL(blob);
+        } catch (error) {
+            setDownloads(prev => prev.map(d => d.id === downloadId ? { ...d, status: 'error' } : d));
         }
     };
 
@@ -187,11 +249,46 @@ export const WireBoxApp = ({ user, setUser, openApp }: { user: UserProfile, setU
                     />
                 </div>
 
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1 relative">
+                    <button onClick={() => setShowDownloads(!showDownloads)} className={`p-2 rounded-xl transition ${showDownloads ? 'bg-blue-50 text-blue-600' : 'text-slate-400 hover:bg-slate-100'}`}>
+                        <Download size={18} />
+                        {downloads.filter(d => d.status === 'downloading').length > 0 && (
+                            <span className="absolute top-1 right-1 w-2 h-2 bg-blue-500 rounded-full"></span>
+                        )}
+                    </button>
                     <button onClick={() => updateTab(activeTabId, { proxyMode: !activeTab.proxyMode })} className={`p-2 rounded-xl transition ${activeTab.proxyMode ? 'text-green-600 bg-green-50' : 'text-slate-400 hover:bg-slate-100'}`} title="Enhanced Mode (Proxy)">
                         <Shield size={18} />
                     </button>
                     <button onClick={() => setShowSettings(!showSettings)} className="p-2 hover:bg-slate-100 rounded-xl text-slate-600 transition"><Settings size={18}/></button>
+                    
+                    {/* Downloads Dropdown */}
+                    {showDownloads && (
+                        <div className="absolute top-full right-0 mt-2 w-80 bg-white rounded-xl shadow-2xl border border-slate-200 z-50 overflow-hidden flex flex-col max-h-96">
+                            <div className="p-3 border-b border-slate-100 font-bold text-slate-800 flex justify-between items-center">
+                                <span>Downloads</span>
+                                {downloads.length > 0 && <button onClick={() => setDownloads([])} className="text-xs text-blue-600 hover:underline">Clear</button>}
+                            </div>
+                            <div className="overflow-y-auto p-2 flex-1">
+                                {downloads.length === 0 ? (
+                                    <div className="text-center text-slate-500 py-8 text-sm">No downloads yet</div>
+                                ) : (
+                                    downloads.map(d => (
+                                        <div key={d.id} className="p-2 hover:bg-slate-50 rounded-lg mb-1 flex items-center gap-3">
+                                            <div className={`p-2 rounded-lg ${d.status === 'completed' ? 'bg-green-100 text-green-600' : d.status === 'error' ? 'bg-red-100 text-red-600' : 'bg-blue-100 text-blue-600'}`}>
+                                                <Download size={16} />
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="text-sm font-medium text-slate-800 truncate">{d.fileName}</div>
+                                                <div className="text-xs text-slate-500">
+                                                    {d.status === 'downloading' ? 'Downloading...' : d.status === 'completed' ? 'Completed' : 'Failed'}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
 

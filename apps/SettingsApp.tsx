@@ -3,10 +3,14 @@ import { User, Palette, HardDrive, Download, Upload, Cpu, AlertCircle, Trash2, C
 import { WALLPAPERS, FILE_ASSOCIATIONS, DEFAULT_APPS } from '../utils/constants';
 
 export const SettingsApp = ({ user, setUser, onDeleteUser }: any) => {
-    const [activeTab, setActiveTab] = useState<'profile' | 'wallpaper' | 'notifications' | 'defaults'>('profile');
+    const [activeTab, setActiveTab] = useState<'profile' | 'appearance' | 'notifications' | 'defaults'>('profile');
 
     const handleWallpaperChange = (url: string) => {
         setUser({ ...user, settings: { ...user.settings, wallpaper: url } });
+    };
+
+    const toggleDarkMode = () => {
+        setUser({ ...user, settings: { ...user.settings, darkMode: !user.settings.darkMode } });
     };
 
     const toggleNotificationSetting = (key: string) => {
@@ -83,8 +87,8 @@ export const SettingsApp = ({ user, setUser, onDeleteUser }: any) => {
                  <button onClick={() => setActiveTab('profile')} className={`text-left px-4 py-2 rounded-lg transition flex items-center gap-2 ${activeTab === 'profile' ? 'bg-blue-50 text-blue-600 font-medium' : 'hover:bg-slate-50'}`}>
                     <User size={18} /> Profile
                  </button>
-                 <button onClick={() => setActiveTab('wallpaper')} className={`text-left px-4 py-2 rounded-lg transition flex items-center gap-2 ${activeTab === 'wallpaper' ? 'bg-blue-50 text-blue-600 font-medium' : 'hover:bg-slate-50'}`}>
-                    <Palette size={18} /> Wallpaper
+                 <button onClick={() => setActiveTab('appearance')} className={`text-left px-4 py-2 rounded-lg transition flex items-center gap-2 ${activeTab === 'appearance' ? 'bg-blue-50 text-blue-600 font-medium' : 'hover:bg-slate-50'}`}>
+                    <Palette size={18} /> Appearance
                  </button>
                  <button onClick={() => setActiveTab('notifications')} className={`text-left px-4 py-2 rounded-lg transition flex items-center gap-2 ${activeTab === 'notifications' ? 'bg-blue-50 text-blue-600 font-medium' : 'hover:bg-slate-50'}`}>
                     <Bell size={18} /> Notifications
@@ -126,7 +130,7 @@ export const SettingsApp = ({ user, setUser, onDeleteUser }: any) => {
                             <h3 className="font-bold mb-4 flex items-center gap-2"><Cpu size={18}/> System Info</h3>
                             <div className="space-y-2 text-sm">
                                 <div className="flex justify-between border-b pb-1">
-                                    <span className="text-slate-500">OS Version</span><span>WeberOS 1.4.0</span>
+                                    <span className="text-slate-500">OS Version</span><span>WeberOS 1.6.0</span>
                                 </div>
                                 <div className="flex justify-between border-b pb-1">
                                     <span className="text-slate-500">Storage Used</span><span>{JSON.stringify(user.fs).length} bytes</span>
@@ -200,9 +204,35 @@ export const SettingsApp = ({ user, setUser, onDeleteUser }: any) => {
                      </div>
                  )}
 
-                 {activeTab === 'wallpaper' && (
-                     <div>
-                         <h3 className="text-2xl font-bold mb-6">Choose Wallpaper</h3>
+                 {activeTab === 'appearance' && (
+                     <div className="max-w-xl">
+                         <h3 className="text-2xl font-bold mb-6">Appearance</h3>
+                         
+                         <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 mb-8">
+                             <h4 className="font-bold mb-4 flex items-center gap-2">System Theme</h4>
+                             <div className="grid grid-cols-2 gap-4">
+                                 <button 
+                                     onClick={() => setUser({ ...user, settings: { ...user.settings, darkMode: false } })}
+                                     className={`p-4 rounded-xl border-2 transition flex flex-col items-center gap-2 ${!user.settings.darkMode ? 'border-blue-500 bg-blue-50' : 'border-slate-100 hover:bg-slate-50'}`}
+                                 >
+                                     <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center text-slate-600">
+                                         <Palette size={24} />
+                                     </div>
+                                     <span className="font-medium">Light Mode</span>
+                                 </button>
+                                 <button 
+                                     onClick={() => setUser({ ...user, settings: { ...user.settings, darkMode: true } })}
+                                     className={`p-4 rounded-xl border-2 transition flex flex-col items-center gap-2 ${user.settings.darkMode ? 'border-blue-500 bg-blue-50' : 'border-slate-100 hover:bg-slate-50'}`}
+                                 >
+                                     <div className="w-12 h-12 bg-slate-900 rounded-full flex items-center justify-center text-blue-400">
+                                         <Palette size={24} />
+                                     </div>
+                                     <span className="font-medium">Dark Mode</span>
+                                 </button>
+                             </div>
+                         </div>
+
+                         <h4 className="font-bold mb-4 flex items-center gap-2">Choose Wallpaper</h4>
                          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                              {WALLPAPERS.map((wp, i) => (
                                  <button 
@@ -220,7 +250,7 @@ export const SettingsApp = ({ user, setUser, onDeleteUser }: any) => {
                              ))}
                          </div>
                      </div>
-                 )}
+                  )}
              </div>
         </div>
     );

@@ -65,7 +65,7 @@ export const MarketApp = ({ user, setUser }: { user: UserProfile, setUser: (u: U
             alert('App is already installed!');
             return;
         }
-        const newCustomApps = { ...user.customApps, [app.id]: { id: app.id, name: app.name, iconName: app.icon, code: app.code }};
+        const newCustomApps = { ...user.customApps, [app.id]: { id: app.id, name: app.name, iconName: app.icon, code: app.code, permissions: app.permissions || [] }};
         const newPkgs = [...user.installedPackages, app.id];
         setUser({...user, installedPackages: newPkgs, customApps: newCustomApps});
         alert(`${app.name} installed successfully!`);

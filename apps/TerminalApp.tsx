@@ -132,7 +132,7 @@ export const TerminalApp = ({ fs, setFs, user, setUser }: TerminalAppProps) => {
                         const pkgData = JSON.parse(node.content || '{}');
                         if (pkgData.id && pkgData.name && pkgData.code) {
                             output = `Installing local package ${pkgData.name}... Success!`;
-                            const newCustomApps = { ...user.customApps, [pkgData.id]: { id: pkgData.id, name: pkgData.name, iconName: pkgData.icon || 'Box', code: pkgData.code }};
+                            const newCustomApps = { ...user.customApps, [pkgData.id]: { id: pkgData.id, name: pkgData.name, iconName: pkgData.icon || 'Box', code: pkgData.code, permissions: pkgData.permissions || [] }};
                             const newPkgs = user.installedPackages.includes(pkgData.id) ? user.installedPackages : [...user.installedPackages, pkgData.id];
                             setUser({...user, installedPackages: newPkgs, customApps: newCustomApps});
                         } else output = 'Error: Invalid .wbr package.';
