@@ -46,6 +46,7 @@ import { WePicApp } from './apps/WePicApp';
 import { WePlayerApp } from './apps/WePlayerApp';
 import { WireBoxApp } from './apps/WireBoxApp';
 import { SnakeApp, CalcoApp, WeatherApp, DynamicAppRuntime } from './apps/MiscApps';
+import { PermTesterApp } from './apps/PermTesterApp';
 
 // Registry
 const SYSTEM_REGISTRY: Record<string, { name: string, icon: any, color: string }> = {
@@ -61,17 +62,20 @@ const SYSTEM_REGISTRY: Record<string, { name: string, icon: any, color: string }
   'helper': { name: 'Helper', icon: HelpCircle, color: 'bg-purple-500' },
   'wepic': { name: 'WePic', icon: ImageIcon, color: 'bg-pink-500' },
   'weplayer': { name: 'WePlayer', icon: Film, color: 'bg-rose-600' },
+  'permtester': { name: 'Perm Tester', icon: Shield, color: 'bg-emerald-600' },
 };
 
 const WeberOS = () => {
   const [booting, setBooting] = useState(true);
   const [bootProgress, setBootProgress] = useState(0);
-  const [bootStatus, setBootStatus] = useState('Initializing WeberOS 1.5...');
+  const [bootStatus, setBootStatus] = useState('Initializing WeberOS 1.6...');
 
   const [user, setUserState] = useState<UserProfile | null>(null);
   const [usersList, setUsersList] = useState<UserProfile[]>([]);
   const [selectedProfile, setSelectedProfile] = useState<UserProfile | null>(null);
   const [createMode, setCreateMode] = useState(false);
+  const [createStep, setCreateStep] = useState(1);
+  const [setupDarkMode, setSetupDarkMode] = useState(true);
   
   const [usernameInput, setUsernameInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
@@ -179,12 +183,7 @@ const WeberOS = () => {
   };
 
   const handleCreateProfile = () => {
-      if (!usernameInput) return;
       const db = JSON.parse(localStorage.getItem('weberos_users') || '{}');
-      if (db[usernameInput]) {
-          alert('User already exists');
-          return;
-      }
       
       const newUser: UserProfile & {password: string} = { 
           username: usernameInput, 
@@ -194,7 +193,7 @@ const WeberOS = () => {
           fs: DEFAULT_FS,
           settings: { 
               wallpaper: WALLPAPERS[0], 
-              darkMode: true,
+              darkMode: setupDarkMode,
               desktopIcons: {},
               weather: { mode: 'auto' },
               notifications: { enabled: true, sound: true, external: true },
@@ -207,8 +206,36 @@ const WeberOS = () => {
       
       setUsersList(Object.values(db));
       setCreateMode(false);
+      setCreateStep(1);
       setUsernameInput('');
       setPasswordInput('');
+  };
+
+  const handleNextStep = () => {
+      if (createStep === 1) {
+          if (!usernameInput) return;
+          const db = JSON.parse(localStorage.getItem('weberos_users') || '{}');
+          if (db[usernameInput]) {
+              alert('User already exists');
+              return;
+          }
+          setCreateStep(2);
+      } else if (createStep === 2) {
+          setCreateStep(3);
+      } else if (createStep === 3) {
+          handleCreateProfile();
+      }
+  };
+
+  const requestPermissions = async () => {
+      try {
+          if ('Notification' in window) await Notification.requestPermission();
+          await navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then(s => s.getTracks().forEach(t => t.stop())).catch(() => {});
+          if ('geolocation' in navigator) navigator.geolocation.getCurrentPosition(() => {}, () => {});
+      } catch (e) {
+          console.error("Permission request error", e);
+      }
+      handleNextStep();
   };
 
   const handleLogout = () => {
@@ -445,7 +472,7 @@ const WeberOS = () => {
                           </div>
 
                           <button 
-                              onClick={() => setCreateMode(true)}
+                              onClick={() => { setCreateMode(true); setCreateStep(1); }}
                               className="w-full flex items-center justify-center gap-2 p-4 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-2xl transition shadow-xl shadow-blue-900/20"
                           >
                               <Plus size={20} /> Create New Profile
@@ -485,43 +512,112 @@ const WeberOS = () => {
                       </div>
                   ) : (
                       <div className="space-y-6 animate-in slide-in-from-right duration-300">
-                          <button onClick={() => setCreateMode(false)} className="text-slate-400 hover:text-white flex items-center gap-2 transition">
+                          <button onClick={() => {
+                              if (createStep > 1) setCreateStep(createStep - 1);
+                              else setCreateMode(false);
+                          }} className="text-slate-400 hover:text-white flex items-center gap-2 transition">
                               <ArrowLeft size={18} /> Back
                           </button>
-                          <div className="text-center">
-                              <div className="w-16 h-16 bg-slate-800 rounded-2xl flex items-center justify-center text-blue-500 mx-auto mb-4">
-                                  <User size={32} />
-                              </div>
-                              <h2 className="text-2xl font-bold text-white">New Profile</h2>
-                          </div>
-                          <div className="space-y-4">
-                              <div className="relative">
-                                  <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
-                                  <input 
-                                      placeholder="Username"
-                                      value={usernameInput}
-                                      onChange={e => setUsernameInput(e.target.value)}
-                                      className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 pl-12 text-white focus:border-blue-500 outline-none transition"
-                                  />
-                              </div>
-                              <div className="relative">
-                                  <Key className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
-                                  <input 
-                                      type="password"
-                                      placeholder="Password (optional)"
-                                      value={passwordInput}
-                                      onChange={e => setPasswordInput(e.target.value)}
-                                      className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 pl-12 text-white focus:border-blue-500 outline-none transition"
-                                  />
-                              </div>
-                              <button 
-                                  onClick={handleCreateProfile}
-                                  disabled={!usernameInput}
-                                  className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold py-4 rounded-2xl transition shadow-xl shadow-blue-900/20"
-                              >
-                                  Create User
-                              </button>
-                          </div>
+                          
+                          {createStep === 1 && (
+                              <>
+                                  <div className="text-center">
+                                      <div className="w-16 h-16 bg-slate-800 rounded-2xl flex items-center justify-center text-blue-500 mx-auto mb-4">
+                                          <User size={32} />
+                                      </div>
+                                      <h2 className="text-2xl font-bold text-white">New Profile</h2>
+                                  </div>
+                                  <div className="space-y-4">
+                                      <div className="relative">
+                                          <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+                                          <input 
+                                              placeholder="Username"
+                                              value={usernameInput}
+                                              onChange={e => setUsernameInput(e.target.value)}
+                                              className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 pl-12 text-white focus:border-blue-500 outline-none transition"
+                                          />
+                                      </div>
+                                      <div className="relative">
+                                          <Key className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+                                          <input 
+                                              type="password"
+                                              placeholder="Password (optional)"
+                                              value={passwordInput}
+                                              onChange={e => setPasswordInput(e.target.value)}
+                                              className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 pl-12 text-white focus:border-blue-500 outline-none transition"
+                                          />
+                                      </div>
+                                      <button 
+                                          onClick={handleNextStep}
+                                          disabled={!usernameInput}
+                                          className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold py-4 rounded-2xl transition shadow-xl shadow-blue-900/20"
+                                      >
+                                          Next
+                                      </button>
+                                  </div>
+                              </>
+                          )}
+
+                          {createStep === 2 && (
+                              <>
+                                  <div className="text-center">
+                                      <h2 className="text-2xl font-bold text-white mb-2">Choose Theme</h2>
+                                      <p className="text-slate-400">Select your preferred appearance</p>
+                                  </div>
+                                  <div className="grid grid-cols-2 gap-4">
+                                      <button 
+                                          onClick={() => setSetupDarkMode(false)}
+                                          className={`p-4 rounded-2xl border-2 transition flex flex-col items-center gap-3 ${!setupDarkMode ? 'border-blue-500 bg-blue-500/10' : 'border-white/10 bg-white/5 hover:bg-white/10'}`}
+                                      >
+                                          <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center">
+                                              <CloudSun className="text-slate-600" size={24} />
+                                          </div>
+                                          <span className="text-white font-medium">Light Mode</span>
+                                      </button>
+                                      <button 
+                                          onClick={() => setSetupDarkMode(true)}
+                                          className={`p-4 rounded-2xl border-2 transition flex flex-col items-center gap-3 ${setupDarkMode ? 'border-blue-500 bg-blue-500/10' : 'border-white/10 bg-white/5 hover:bg-white/10'}`}
+                                      >
+                                          <div className="w-16 h-16 bg-slate-900 rounded-full flex items-center justify-center border border-slate-700">
+                                              <CloudSun className="text-blue-400" size={24} />
+                                          </div>
+                                          <span className="text-white font-medium">Dark Mode</span>
+                                      </button>
+                                  </div>
+                                  <button 
+                                      onClick={handleNextStep}
+                                      className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-2xl transition shadow-xl shadow-blue-900/20 mt-6"
+                                  >
+                                      Next
+                                  </button>
+                              </>
+                          )}
+
+                          {createStep === 3 && (
+                              <>
+                                  <div className="text-center">
+                                      <div className="w-16 h-16 bg-slate-800 rounded-2xl flex items-center justify-center text-emerald-500 mx-auto mb-4">
+                                          <Shield size={32} />
+                                      </div>
+                                      <h2 className="text-2xl font-bold text-white mb-2">Permissions</h2>
+                                      <p className="text-slate-400 text-sm">WeberOS works best with access to your camera, microphone, location, and notifications. You can grant these now or later.</p>
+                                  </div>
+                                  <div className="space-y-3">
+                                      <button 
+                                          onClick={requestPermissions}
+                                          className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-4 rounded-2xl transition shadow-xl shadow-emerald-900/20"
+                                      >
+                                          Grant Permissions
+                                      </button>
+                                      <button 
+                                          onClick={handleNextStep}
+                                          className="w-full bg-white/5 hover:bg-white/10 text-white font-bold py-4 rounded-2xl transition"
+                                      >
+                                          Skip for now
+                                      </button>
+                                  </div>
+                              </>
+                          )}
                       </div>
                   )}
               </div>
@@ -530,7 +626,7 @@ const WeberOS = () => {
   }
 
   return (
-    <div className="h-screen w-screen overflow-hidden relative font-sans select-none"
+    <div className={`h-screen w-screen overflow-hidden relative font-sans select-none ${user.settings.darkMode ? 'dark' : ''}`}
         style={{
             backgroundImage: `url("${user.settings.wallpaper}")`,
             backgroundSize: 'cover',
@@ -593,6 +689,7 @@ const WeberOS = () => {
             else if (win.appId === 'wepic') AppContent = <WePicApp fs={fs} launchData={win.data} openFilePicker={openFilePicker} />;
             else if (win.appId === 'weplayer') AppContent = <WePlayerApp fs={fs} launchData={win.data} openFilePicker={openFilePicker} volume={volume} />;
             else if (win.appId === 'wirebox') AppContent = <WireBoxApp user={user} setUser={setUser} openApp={openApp} />;
+            else if (win.appId === 'permtester') AppContent = <PermTesterApp />;
             
             else if (user.customApps[win.appId]) {
                 AppContent = <DynamicAppRuntime app={user.customApps[win.appId]} onNotify={sendNotification} />;
