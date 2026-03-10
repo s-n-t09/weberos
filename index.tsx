@@ -424,7 +424,7 @@ const WeberOS = () => {
       return (
           <div className="h-screen w-screen bg-black flex flex-col items-center justify-center text-white font-sans">
               <div className="relative mb-8">
-                  <img src="https://files.catbox.moe/l1ecpj.png" alt="WeberOS" className="w-24 h-24 animate-pulse" />
+                  <img src="https://files.catbox.moe/uumgd2.png" alt="WeberOS" className="w-24 h-24 animate-pulse" />
                   <div className="absolute inset-0 rounded-full border-4 border-blue-500/20 border-t-blue-500 animate-spin"></div>
               </div>
               <h1 className="text-2xl font-bold tracking-widest mb-2">WeberOS</h1>
