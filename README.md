@@ -3,7 +3,7 @@
   <a href="https://github.com/s-n-t09/weberos">
     <img src="/logo.png" alt="WeberOS Logo" width="125" height="125">
   </a>
-  <h1 align="center">WeberOS v1.6</h1>
+  <h1 align="center">WeberOS v1.7</h1>
 
   <p align="center">
     <strong>Next-Gen Web-Based Operating System Simulator</strong>
@@ -173,9 +173,9 @@ Open this file in **WeberOS Explorer** to install and run it!
 
 ---
 
-## 🛡️ API Permissions (v1.6)
+## 🛡️ API Permissions (v1.7)
 
-In version 1.6, you can request system permissions in your `.wbr` manifest to access advanced features.
+In version 1.7, you can request system permissions in your `.wbr` manifest to access advanced features.
 
 | Permission | Description | API Access |
 | :--- | :--- | :--- |

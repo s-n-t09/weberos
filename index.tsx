@@ -35,6 +35,10 @@ import { DEFAULT_FS, WALLPAPERS, DEFAULT_APPS, REPO_PACKAGES, FILE_ASSOCIATIONS 
 import { WindowFrame } from './components/WindowFrame';
 import { VolumePopup } from './components/VolumePopup';
 import { OpenWithDialog } from './components/OpenWithDialog';
+import { DialogHost, osAlert } from './components/DialogHost';
+import { DesktopIcon } from './components/DesktopIcon';
+
+import swUrl from './utils/sw.js?url';
 
 import { TerminalApp } from './apps/TerminalApp';
 import { ExplorerApp } from './apps/ExplorerApp';
@@ -68,14 +72,14 @@ const SYSTEM_REGISTRY: Record<string, { name: string, icon: any, color: string }
 const WeberOS = () => {
   const [booting, setBooting] = useState(true);
   const [bootProgress, setBootProgress] = useState(0);
-  const [bootStatus, setBootStatus] = useState('Initializing WeberOS 1.6...');
+  const [bootStatus, setBootStatus] = useState('Initializing WeberOS 1.7...');
 
   const [user, setUserState] = useState<UserProfile | null>(null);
   const [usersList, setUsersList] = useState<UserProfile[]>([]);
   const [selectedProfile, setSelectedProfile] = useState<UserProfile | null>(null);
   const [createMode, setCreateMode] = useState(false);
   const [createStep, setCreateStep] = useState(1);
-  const [setupDarkMode, setSetupDarkMode] = useState(true);
+  const [setupWallpaper, setSetupWallpaper] = useState(WALLPAPERS[0]);
   
   const [usernameInput, setUsernameInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
@@ -83,6 +87,7 @@ const WeberOS = () => {
   const [windows, setWindows] = useState<WindowState[]>([]);
   const [activeWinId, setActiveWinId] = useState<string | null>(null);
   const [startOpen, setStartOpen] = useState(false);
+  const [startSearchQuery, setStartSearchQuery] = useState('');
   const [time, setTime] = useState(new Date());
 
   const [volume, setVolume] = useState(70);
@@ -95,6 +100,11 @@ const WeberOS = () => {
 
   // Boot Animation Logic
   useEffect(() => {
+    // Register Service Worker for notifications
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register(swUrl).catch(err => console.warn('SW registration failed:', err));
+    }
+
     const steps = [
         { p: 10, s: 'Loading Kernel...' },
         { p: 30, s: 'Mounting Virtual Filesystem...' },
@@ -149,6 +159,21 @@ const WeberOS = () => {
       }
   };
 
+  const handleDesktopIconMove = (id: string, x: number, y: number) => {
+      if (user) {
+          setUser({
+              ...user,
+              settings: {
+                  ...user.settings,
+                  desktopIcons: {
+                      ...user.settings.desktopIcons,
+                      [id]: { x, y }
+                  }
+              }
+          });
+      }
+  };
+
   const fs = user?.fs || DEFAULT_FS;
   const setFs = (newFs: FileSystemNode) => {
       if (user) setUser({ ...user, fs: newFs });
@@ -167,7 +192,6 @@ const WeberOS = () => {
             fs: storedUser.fs || DEFAULT_FS,
             settings: { 
                 wallpaper: storedUser.settings?.wallpaper || WALLPAPERS[0], 
-                darkMode: true,
                 desktopIcons: storedUser.settings?.desktopIcons || {},
                 weather: storedUser.settings?.weather || { mode: 'auto' },
                 notifications: storedUser.settings?.notifications || { enabled: true, sound: true, external: true },
@@ -178,7 +202,7 @@ const WeberOS = () => {
         setSelectedProfile(null);
         setPasswordInput('');
     } else {
-        alert('Invalid password');
+        osAlert('Invalid password');
     }
   };
 
@@ -192,8 +216,7 @@ const WeberOS = () => {
           customApps: {}, 
           fs: DEFAULT_FS,
           settings: { 
-              wallpaper: WALLPAPERS[0], 
-              darkMode: setupDarkMode,
+              wallpaper: setupWallpaper, 
               desktopIcons: {},
               weather: { mode: 'auto' },
               notifications: { enabled: true, sound: true, external: true },
@@ -216,7 +239,7 @@ const WeberOS = () => {
           if (!usernameInput) return;
           const db = JSON.parse(localStorage.getItem('weberos_users') || '{}');
           if (db[usernameInput]) {
-              alert('User already exists');
+              osAlert('User already exists');
               return;
           }
           setCreateStep(2);
@@ -261,20 +284,44 @@ const WeberOS = () => {
       setNotifications(prev => [newNotif, ...prev]);
 
       if (user.settings.notifications.external && 'Notification' in window) {
-          if (Notification.permission === 'granted') {
-              new Notification(title, { body: message });
-          } else if (Notification.permission !== 'denied') {
-              Notification.requestPermission().then(permission => {
-                  if (permission === 'granted') {
-                      new Notification(title, { body: message });
+          const showExternal = async () => {
+              try {
+                  if (Notification.permission === 'granted') {
+                      try {
+                          new Notification(title, { body: message });
+                      } catch (e) {
+                          // Fallback for browsers that require ServiceWorkerRegistration.showNotification()
+                          if ('serviceWorker' in navigator) {
+                              const registration = await navigator.serviceWorker.ready;
+                              registration.showNotification(title, { body: message });
+                          } else {
+                              console.warn("Notification constructor failed and no service worker ready:", e);
+                          }
+                      }
+                  } else if (Notification.permission !== 'denied') {
+                      const permission = await Notification.requestPermission();
+                      if (permission === 'granted') {
+                          try {
+                              new Notification(title, { body: message });
+                          } catch (e) {
+                              if ('serviceWorker' in navigator) {
+                                  const registration = await navigator.serviceWorker.ready;
+                                  registration.showNotification(title, { body: message });
+                              }
+                          }
+                      }
                   }
-              });
-          }
+              } catch (err) {
+                  console.warn("External notification error:", err);
+              }
+          };
+          showExternal();
       }
   };
 
   const openApp = (appId: string, data?: any) => {
     setStartOpen(false);
+    setStartSearchQuery('');
     const existing = windows.find(w => w.appId === appId && !data);
     if (existing) {
         focusWindow(existing.id);
@@ -561,28 +608,24 @@ const WeberOS = () => {
                           {createStep === 2 && (
                               <>
                                   <div className="text-center">
-                                      <h2 className="text-2xl font-bold text-white mb-2">Choose Theme</h2>
-                                      <p className="text-slate-400">Select your preferred appearance</p>
+                                      <h2 className="text-2xl font-bold text-white mb-2">Choose Wallpaper</h2>
+                                      <p className="text-slate-400">Select your starting background</p>
                                   </div>
-                                  <div className="grid grid-cols-2 gap-4">
-                                      <button 
-                                          onClick={() => setSetupDarkMode(false)}
-                                          className={`p-4 rounded-2xl border-2 transition flex flex-col items-center gap-3 ${!setupDarkMode ? 'border-blue-500 bg-blue-500/10' : 'border-white/10 bg-white/5 hover:bg-white/10'}`}
-                                      >
-                                          <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center">
-                                              <CloudSun className="text-slate-600" size={24} />
-                                          </div>
-                                          <span className="text-white font-medium">Light Mode</span>
-                                      </button>
-                                      <button 
-                                          onClick={() => setSetupDarkMode(true)}
-                                          className={`p-4 rounded-2xl border-2 transition flex flex-col items-center gap-3 ${setupDarkMode ? 'border-blue-500 bg-blue-500/10' : 'border-white/10 bg-white/5 hover:bg-white/10'}`}
-                                      >
-                                          <div className="w-16 h-16 bg-slate-900 rounded-full flex items-center justify-center border border-slate-700">
-                                              <CloudSun className="text-blue-400" size={24} />
-                                          </div>
-                                          <span className="text-white font-medium">Dark Mode</span>
-                                      </button>
+                                  <div className="grid grid-cols-2 gap-3 max-h-60 overflow-y-auto p-2 custom-scrollbar">
+                                      {WALLPAPERS.map((wp, i) => (
+                                          <button 
+                                              key={i}
+                                              onClick={() => setSetupWallpaper(wp)}
+                                              className={`relative aspect-video rounded-xl overflow-hidden border-2 transition ${setupWallpaper === wp ? 'border-blue-500 shadow-lg shadow-blue-500/20' : 'border-white/10 hover:border-white/30'}`}
+                                          >
+                                              <img src={wp} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                                              {setupWallpaper === wp && (
+                                                  <div className="absolute inset-0 bg-blue-500/20 flex items-center justify-center">
+                                                      <Plus className="text-white" size={24} />
+                                                  </div>
+                                              )}
+                                          </button>
+                                      ))}
                                   </div>
                                   <button 
                                       onClick={handleNextStep}
@@ -626,14 +669,14 @@ const WeberOS = () => {
   }
 
   return (
-    <div className={`h-screen w-screen overflow-hidden relative font-sans select-none ${user.settings.darkMode ? 'dark' : ''}`}
+    <div className={`h-screen w-screen overflow-hidden relative font-sans select-none`}
         style={{
             backgroundImage: `url("${user.settings.wallpaper}")`,
             backgroundSize: 'cover',
             backgroundPosition: 'center',
             transition: 'background-image 0.5s ease-in-out'
         }}
-        onClick={() => { setShowVolumePopup(false); setShowNotifPanel(false); setStartOpen(false); }}
+        onClick={() => { setShowVolumePopup(false); setShowNotifPanel(false); setStartOpen(false); setStartSearchQuery(''); }}
     >
         <input type="file" id="hidden-file-input" onChange={handleFileUpload} className="hidden" />
 
@@ -649,19 +692,33 @@ const WeberOS = () => {
         )}
 
         {/* Desktop Icons */}
-        <div className="p-4 grid grid-flow-col grid-rows-[repeat(auto-fill,96px)] gap-4 h-[calc(100%-80px)] w-fit">
-            {availableApps.filter(app => !['settings', 'helper', 'wepic', 'weplayer'].includes(app.id)).map((app) => (
-                <div 
-                    key={app.id} 
-                    onDoubleClick={() => openApp(app.id)}
-                    className="group flex flex-col items-center gap-1 w-20 text-white p-2 rounded transition hover:bg-white/10 active:scale-95 cursor-pointer"
-                >
-                    <div className={`w-12 h-12 ${app.color} rounded-2xl shadow-lg flex items-center justify-center group-hover:scale-105 transition`}>
-                        <app.icon size={24} />
-                    </div>
-                    <span className="text-[10px] font-medium drop-shadow-md bg-black/40 px-2 py-0.5 rounded-full truncate w-full text-center">{app.name}</span>
-                </div>
-            ))}
+        <div className="absolute inset-0 pointer-events-none overflow-hidden h-[calc(100%-80px)]">
+            <div className="relative w-full h-full pointer-events-auto">
+                {availableApps.filter(app => !['settings', 'helper', 'wepic', 'weplayer'].includes(app.id)).map((app, index) => {
+                    const rowHeight = 112; // 96 + 16
+                    const colWidth = 96; // 80 + 16
+                    const maxRows = Math.max(1, Math.floor((window.innerHeight - 80 - 32) / rowHeight));
+                    const col = Math.floor(index / maxRows);
+                    const row = index % maxRows;
+                    const initialX = 16 + col * colWidth;
+                    const initialY = 16 + row * rowHeight;
+                    
+                    return (
+                        <DesktopIcon
+                            key={app.id}
+                            id={app.id}
+                            name={app.name}
+                            icon={app.icon}
+                            color={app.color}
+                            initialX={initialX}
+                            initialY={initialY}
+                            savedPosition={user.settings.desktopIcons?.[app.id]}
+                            onDoubleClick={() => openApp(app.id)}
+                            onMove={handleDesktopIconMove}
+                        />
+                    );
+                })}
+            </div>
         </div>
 
         {/* Windows */}
@@ -680,8 +737,8 @@ const WeberOS = () => {
                 }} 
                 onOpen={launchFile}
             />;
-            else if (win.appId === 'snake') AppContent = <SnakeApp />;
-            else if (win.appId === 'calco') AppContent = <CalcoApp />;
+            else if (win.appId === 'snake') AppContent = <SnakeApp user={user} />;
+            else if (win.appId === 'calco') AppContent = <CalcoApp user={user} />;
             else if (win.appId === 'weather') AppContent = <WeatherApp user={user} setUser={setUser} />;
             else if (win.appId === 'settings') AppContent = <SettingsApp user={user} setUser={setUser} onDeleteUser={deleteUser} />;
             else if (win.appId === 'market') AppContent = <MarketApp user={user} setUser={setUser} />;
@@ -692,7 +749,7 @@ const WeberOS = () => {
             else if (win.appId === 'permtester') AppContent = <PermTesterApp />;
             
             else if (user.customApps[win.appId]) {
-                AppContent = <DynamicAppRuntime app={user.customApps[win.appId]} onNotify={sendNotification} />;
+                AppContent = <DynamicAppRuntime app={user.customApps[win.appId]} user={user} onNotify={sendNotification} />;
             }
             else AppContent = <div className="h-full flex items-center justify-center">Unknown App</div>;
 
@@ -719,23 +776,38 @@ const WeberOS = () => {
         {/* Start Menu */}
         {startOpen && (
             <div 
-                className="fixed bottom-20 left-4 w-80 bg-slate-900/95 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-[200] animate-in slide-in-from-bottom-4 duration-200"
+                className={`fixed bottom-20 left-4 w-80 backdrop-blur-2xl border rounded-2xl shadow-2xl overflow-hidden z-[200] animate-in slide-in-from-bottom-4 duration-200 transition-colors bg-slate-900/95 border-white/10`}
                 onClick={(e) => e.stopPropagation()}
             >
-                <div className="p-4 bg-white/5 border-b border-white/10 flex items-center gap-3">
-                    <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold shadow-lg">
+                <div className={`p-4 border-b flex items-center gap-3 transition-colors bg-white/5 border-white/10`}>
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold shadow-lg transition-colors bg-blue-600`}>
                         {user.username.substring(0,2).toUpperCase()}
                     </div>
                     <div className="flex-1">
-                        <div className="font-bold text-white text-sm">{user.username}</div>
-                        <div className="text-[10px] text-blue-400 flex items-center gap-1"><Shield size={10}/> Standard User</div>
+                        <div className={`font-bold text-sm transition-colors text-white`}>{user.username}</div>
+                        <div className={`text-[10px] flex items-center gap-1 transition-colors text-blue-400`}><Shield size={10}/> Standard User</div>
                     </div>
-                    <button onClick={handleLogout} className="p-2 hover:bg-red-500/20 text-slate-400 hover:text-red-400 rounded-xl transition"><LogOut size={16}/></button>
+                    <button onClick={handleLogout} className={`p-2 rounded-xl transition hover:bg-red-500/20 text-slate-400 hover:text-red-400`}><LogOut size={16}/></button>
                 </div>
-                <div className="p-3 grid grid-cols-1 gap-1 max-h-80 overflow-y-auto custom-scrollbar">
-                    {sortedApps.map(app => (
-                        <button key={app.id} onClick={() => openApp(app.id)} className="flex items-center gap-3 p-2 hover:bg-white/10 rounded-xl text-left text-slate-200 transition group">
-                            <div className={`p-2 rounded-xl ${app.color} shadow-lg group-hover:scale-110 transition`}>
+                
+                <div className="p-3">
+                    <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border transition-colors bg-white/5 border-white/10 text-slate-400 focus-within:border-blue-500/50`}>
+                        <Search size={14} />
+                        <input 
+                            type="text" 
+                            placeholder="Search apps, files..." 
+                            value={startSearchQuery}
+                            onChange={(e) => setStartSearchQuery(e.target.value)}
+                            className="bg-transparent border-none outline-none text-xs w-full placeholder:text-slate-500"
+                            autoFocus
+                        />
+                    </div>
+                </div>
+
+                <div className="p-3 pt-0 grid grid-cols-1 gap-1 max-h-80 overflow-y-auto custom-scrollbar">
+                    {sortedApps.filter(app => app.name.toLowerCase().includes(startSearchQuery.toLowerCase())).map(app => (
+                        <button key={app.id} onClick={() => openApp(app.id)} className={`flex items-center gap-3 p-2 rounded-xl text-left transition group hover:bg-white/10 text-slate-200`}>
+                            <div className={`p-2 rounded-xl shadow-lg group-hover:scale-110 transition ${app.color}`}>
                                 <app.icon size={16} className="text-white"/>
                             </div>
                             <span className="text-sm font-medium">{app.name}</span>
@@ -746,13 +818,14 @@ const WeberOS = () => {
         )}
 
         {showVolumePopup && <VolumePopup volume={volume} setVolume={setVolume} />}
+        <DialogHost />
 
         {showNotifPanel && (
             <div 
-                className="fixed bottom-20 right-4 w-80 max-h-96 bg-slate-900/95 backdrop-blur-2xl border border-white/10 rounded-2xl flex flex-col z-[210] shadow-2xl animate-in slide-in-from-right-4 duration-200" 
+                className={`fixed bottom-20 right-4 w-80 max-h-96 backdrop-blur-2xl border rounded-2xl flex flex-col z-[210] shadow-2xl animate-in slide-in-from-right-4 duration-200 transition-colors bg-slate-900/95 border-white/10`} 
                 onClick={(e) => e.stopPropagation()}
             >
-                <div className="p-4 border-b border-white/10 flex justify-between items-center text-white">
+                <div className={`p-4 border-b flex justify-between items-center transition-colors border-white/10 text-white`}>
                     <span className="font-bold">Notifications</span>
                     {notifications.length > 0 && <button onClick={() => setNotifications([])} className="text-xs text-blue-400 hover:text-blue-300">Clear All</button>}
                 </div>
@@ -761,13 +834,13 @@ const WeberOS = () => {
                         <div className="text-center text-slate-500 py-12 text-sm">No new notifications</div>
                     ) : (
                         notifications.map(notif => (
-                            <div key={notif.id} className="bg-white/5 p-3 rounded-xl border border-white/5 hover:bg-white/10 transition">
+                            <div key={notif.id} className={`p-3 rounded-xl border transition bg-white/5 border-white/5 hover:bg-white/10`}>
                                 <div className="flex justify-between items-start mb-1">
-                                    <span className="text-[10px] font-bold text-blue-400 uppercase tracking-wider">{notif.app}</span>
+                                    <span className={`text-[10px] font-bold uppercase tracking-wider text-blue-400`}>{notif.app}</span>
                                     <span className="text-[10px] text-slate-500">{new Date(notif.timestamp).toLocaleTimeString()}</span>
                                 </div>
-                                <div className="font-bold text-sm text-slate-200">{notif.title}</div>
-                                <div className="text-xs text-slate-400">{notif.message}</div>
+                                <div className={`font-bold text-sm transition-colors text-slate-200`}>{notif.title}</div>
+                                <div className={`text-xs transition-colors text-slate-400`}>{notif.message}</div>
                             </div>
                         ))
                     )}
@@ -776,7 +849,7 @@ const WeberOS = () => {
         )}
 
         {/* Taskbar */}
-        <div className="fixed bottom-4 left-4 right-4 h-14 bg-slate-900/80 backdrop-blur-2xl border border-white/10 rounded-2xl flex items-center px-4 justify-between z-[150] shadow-2xl">
+        <div className={`fixed bottom-4 left-4 right-4 h-14 backdrop-blur-2xl border rounded-2xl flex items-center px-4 justify-between z-[150] shadow-2xl transition-colors bg-slate-900/80 border-white/10`}>
             <div className="flex items-center gap-2">
                 <button 
                     onClick={(e) => { e.stopPropagation(); setStartOpen(!startOpen); setShowVolumePopup(false); setShowNotifPanel(false); }}
@@ -785,7 +858,7 @@ const WeberOS = () => {
                     <LayoutGrid size={20} />
                 </button>
                 
-                <div className="h-6 w-px bg-white/10 mx-1"></div>
+                <div className={`h-6 w-px mx-1 bg-white/10`}></div>
 
                 <div className="flex items-center gap-1 overflow-x-auto max-w-[50vw] custom-scrollbar no-scrollbar">
                     {windows.map(win => {
@@ -795,9 +868,9 @@ const WeberOS = () => {
                             <button 
                                 key={win.id}
                                 onClick={() => toggleMinimize(win.id)}
-                                className={`h-10 px-3 rounded-xl flex items-center gap-2 transition group min-w-[40px] ${activeWinId === win.id ? 'bg-white/15 text-white' : 'text-slate-400 hover:bg-white/5'}`}
+                                className={`h-10 px-3 rounded-xl flex items-center gap-2 transition group min-w-[40px] relative ${activeWinId === win.id ? 'bg-white/15 text-white' : 'text-slate-400 hover:bg-white/5'}`}
                             >
-                                <div className={`p-1.5 rounded-lg ${app?.color || 'bg-slate-700'} shadow-sm group-hover:scale-110 transition`}>
+                                <div className={`p-1.5 rounded-lg shadow-sm group-hover:scale-110 transition ${app?.color || 'bg-slate-700'}`}>
                                     <AppIcon size={14} className="text-white" />
                                 </div>
                                 <span className="text-xs font-medium hidden md:block max-w-[100px] truncate">{win.title}</span>
@@ -814,7 +887,7 @@ const WeberOS = () => {
                     className={`p-2 rounded-xl transition relative ${showNotifPanel ? 'text-blue-400 bg-white/10' : 'text-slate-400 hover:bg-white/10'}`}
                 >
                     <Bell size={18} />
-                    {notifications.length > 0 && <div className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-slate-900"></div>}
+                    {notifications.length > 0 && <div className={`absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-slate-900`}></div>}
                 </button>
                 <button 
                     onClick={(e) => { e.stopPropagation(); setShowVolumePopup(!showVolumePopup); setStartOpen(false); setShowNotifPanel(false); }}
@@ -822,9 +895,9 @@ const WeberOS = () => {
                 >
                     <Volume2 size={18} />
                 </button>
-                <div className="flex flex-col items-end px-2 border-l border-white/10">
-                    <span className="text-xs font-bold text-white leading-none">{time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                    <span className="text-[10px] text-slate-500 font-medium">{time.toLocaleDateString([], { month: 'short', day: 'numeric' })}</span>
+                <div className={`flex flex-col items-end px-2 border-l border-white/10`}>
+                    <span className={`text-xs font-bold leading-none text-white`}>{time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                    <span className={`text-[10px] font-medium text-slate-500`}>{time.toLocaleDateString([], { month: 'short', day: 'numeric' })}</span>
                 </div>
             </div>
         </div>

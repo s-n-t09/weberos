@@ -52,7 +52,6 @@ export type UserProfile = {
   fs: FileSystemNode;
   settings: {
       wallpaper: string;
-      darkMode: boolean;
       desktopIcons: Record<string, {x: number, y: number}>;
       weather: WeatherConfig;
       notifications: {
