@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Download, LayoutGrid, Code, Image as ImageIcon, Gamepad2, Cpu, Package, Search } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { UserProfile } from '../types';
+import { osAlert } from '../components/DialogHost';
 
 export const MarketApp = ({ user, setUser }: { user: UserProfile, setUser: (u: UserProfile) => void }) => {
     const [activeCategory, setActiveCategory] = useState('All');
@@ -60,15 +61,15 @@ export const MarketApp = ({ user, setUser }: { user: UserProfile, setUser: (u: U
         return matchesCategory && matchesSearch;
     });
 
-    const handleInstall = (app: any) => {
+    const handleInstall = async (app: any) => {
         if (user.installedPackages.includes(app.id)) {
-            alert('App is already installed!');
+            await osAlert('App is already installed!');
             return;
         }
         const newCustomApps = { ...user.customApps, [app.id]: { id: app.id, name: app.name, iconName: app.icon, code: app.code, permissions: app.permissions || [] }};
         const newPkgs = [...user.installedPackages, app.id];
         setUser({...user, installedPackages: newPkgs, customApps: newCustomApps});
-        alert(`${app.name} installed successfully!`);
+        await osAlert(`${app.name} installed successfully!`);
     };
 
     return (

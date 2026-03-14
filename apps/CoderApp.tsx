@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Plus, Save, FileCode, ChevronDown, ChevronRight, FilePlus } from 'lucide-react';
 import { resolvePath } from '../utils/fs';
 import { USER_HOME_PATH } from '../utils/constants';
+import { osAlert, osPrompt } from '../components/DialogHost';
 
 const FileTreeNode = ({ name, node, path, onSelect, currentFile }: any) => {
     const [expanded, setExpanded] = useState(false);
@@ -90,8 +91,8 @@ export const CoderApp = ({ fs, setFs, launchData }: any) => {
         }
     }, [launchData]);
 
-    const handleNew = () => {
-        const name = prompt("Enter new filename (e.g. myapp.wbr):");
+    const handleNew = async () => {
+        const name = await osPrompt("Enter new filename (e.g. myapp.wbr):");
         if (!name) return;
         
         let parent = fs;
@@ -101,7 +102,7 @@ export const CoderApp = ({ fs, setFs, launchData }: any) => {
         
         if (parent.children) {
             if (parent.children[name]) {
-                alert("File already exists!");
+                await osAlert("File already exists!");
             } else {
                 // Default content based on extension
                 let initialContent = '';

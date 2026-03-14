@@ -3,6 +3,7 @@ import { ArrowUp, FilePlus, Plus, Copy, Scissors, Clipboard, Trash2, Folder, Fil
 import { FileSystemNode, UserProfile } from '../types';
 import { getDirContents, deepClone } from '../utils/fs';
 import { USER_HOME_PATH } from '../utils/constants';
+import { osAlert, osConfirm, osPrompt } from '../components/DialogHost';
 
 interface ExplorerAppProps {
     fs: FileSystemNode;
@@ -110,9 +111,9 @@ export const ExplorerApp = ({ fs, setFs, user, mode = 'normal', onPick, onOpen }
         setFs({ ...fs });
     };
 
-    const handleDelete = () => {
+    const handleDelete = async () => {
         if (!selected) return;
-        const confirm = window.confirm(`Are you sure you want to delete ${selected}?`);
+        const confirm = await osConfirm(`Are you sure you want to delete ${selected}?`);
         if (confirm) {
             let parent = fs;
             for (const p of path) {
@@ -126,8 +127,8 @@ export const ExplorerApp = ({ fs, setFs, user, mode = 'normal', onPick, onOpen }
         }
     };
 
-    const handleNewFolder = () => {
-        const name = prompt("Enter folder name:");
+    const handleNewFolder = async () => {
+        const name = await osPrompt("Enter folder name:");
         if (!name) return;
         let parent = fs;
         for (const p of path) {
@@ -135,7 +136,7 @@ export const ExplorerApp = ({ fs, setFs, user, mode = 'normal', onPick, onOpen }
         }
         if (parent.children) {
             if (parent.children[name]) {
-                alert("Item already exists!");
+                await osAlert("Item already exists!");
             } else {
                 parent.children[name] = { type: 'dir', children: {} };
                 setFs({ ...fs });
@@ -143,8 +144,8 @@ export const ExplorerApp = ({ fs, setFs, user, mode = 'normal', onPick, onOpen }
         }
     };
 
-    const handleNewFile = () => {
-        const name = prompt("Enter file name (e.g. note.txt):");
+    const handleNewFile = async () => {
+        const name = await osPrompt("Enter file name (e.g. note.txt):");
         if (!name) return;
         let parent = fs;
         for (const p of path) {
@@ -152,7 +153,7 @@ export const ExplorerApp = ({ fs, setFs, user, mode = 'normal', onPick, onOpen }
         }
         if (parent.children) {
             if (parent.children[name]) {
-                alert("Item already exists!");
+                await osAlert("Item already exists!");
             } else {
                 parent.children[name] = { type: 'file', content: '' };
                 setFs({ ...fs });

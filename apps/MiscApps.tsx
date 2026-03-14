@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight, MapPin, MoreVertical, Search, CloudSun, RefreshCw, ShieldAlert, Camera, Mic, Bell } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 
-export const SnakeApp = () => {
+export const SnakeApp = ({ user }: any) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [score, setScore] = useState(0);
     const [gameOver, setGameOver] = useState(false);
@@ -72,9 +72,9 @@ export const SnakeApp = () => {
     }, [gameOver]);
 
     return (
-        <div className="flex flex-col items-center justify-center h-full bg-black text-white p-4">
+        <div className={`flex flex-col items-center justify-center h-full p-4 transition-colors bg-black text-white`}>
             <div className="mb-2 flex justify-between w-[300px] md:w-[400px]"><span>Snake</span><span>Score: {score}</span></div>
-            <canvas ref={canvasRef} width={400} height={400} className="w-[300px] h-[300px] md:w-[400px] md:h-[400px] border border-gray-700 bg-[#111]" />
+            <canvas ref={canvasRef} width={400} height={400} className={`w-[300px] h-[300px] md:w-[400px] md:h-[400px] border transition-colors border-gray-700 bg-[#111]`} />
             {gameOver ? (
                  <div className="mt-2 text-red-500 font-bold">GAME OVER</div>
             ) : (
@@ -84,7 +84,7 @@ export const SnakeApp = () => {
     );
 };
 
-export const CalcoApp = () => {
+export const CalcoApp = ({ user }: any) => {
     const [display, setDisplay] = useState('0');
     const [equation, setEquation] = useState('');
     const handleBtn = (val: string) => {
@@ -95,14 +95,14 @@ export const CalcoApp = () => {
     };
     const btns = ['7','8','9','/','4','5','6','*','1','2','3','-','0','.','=','+','C'];
     return (
-        <div className="h-full flex flex-col bg-gray-900 text-white p-4">
-            <div className="bg-gray-800 p-4 rounded mb-4 text-right">
+        <div className={`h-full flex flex-col p-4 transition-colors bg-gray-900 text-white`}>
+            <div className={`p-4 rounded mb-4 text-right transition-colors bg-gray-800`}>
                 <div className="text-gray-400 text-sm h-5">{equation}</div>
                 <div className="text-3xl font-mono truncate">{display}</div>
             </div>
             <div className="grid grid-cols-4 gap-2 flex-1">
                 {btns.map(b => (
-                    <button key={b} onClick={() => handleBtn(b)} className={`rounded font-bold text-xl hover:bg-opacity-80 transition ${b === '=' ? 'col-span-2 bg-orange-500' : b === 'C' ? 'col-span-4 bg-red-500' : 'bg-gray-700'}`}>{b}</button>
+                    <button key={b} onClick={() => handleBtn(b)} className={`rounded font-bold text-xl hover:bg-opacity-80 transition ${b === '=' ? 'col-span-2 bg-orange-500 text-white' : b === 'C' ? 'col-span-4 bg-red-500 text-white' : 'bg-gray-700'}`}>{b}</button>
                 ))}
             </div>
         </div>
@@ -144,12 +144,12 @@ export const WeatherApp = ({ user, setUser }: any) => {
     }, [config]);
 
     return (
-        <div className="h-full bg-gradient-to-br from-blue-500 to-sky-700 text-white p-6 flex flex-col items-center justify-center relative">
-            <button onClick={() => setConfigMode(true)} className="absolute top-4 right-4 p-2 rounded-full hover:bg-white/20 transition"><MoreVertical size={20} /></button>
+        <div className={`h-full p-6 flex flex-col items-center justify-center relative transition-colors bg-gradient-to-br from-blue-900 to-slate-900 text-white`}>
+            <button onClick={() => setConfigMode(true)} className={`absolute top-4 right-4 p-2 rounded-full transition hover:bg-white/20`}><MoreVertical size={20} /></button>
             {loading ? <RefreshCw className="animate-spin" /> : (
                 <>
                     <div className="text-xl font-light mb-8 flex items-center gap-2"><MapPin size={16} /> {weather?.city}</div>
-                    <CloudSun size={84} className="mb-4 text-yellow-300 drop-shadow-lg" />
+                    <CloudSun size={84} className={`mb-4 drop-shadow-lg text-yellow-300`} />
                     <div className="text-6xl font-bold mb-2">{weather?.temperature}°</div>
                     <div className="text-lg opacity-90">Wind: {weather?.windspeed} km/h</div>
                 </>
@@ -158,9 +158,8 @@ export const WeatherApp = ({ user, setUser }: any) => {
     );
 };
 
-export const DynamicAppRuntime = ({ app, onNotify }: { app: any, onNotify: any }) => {
+export const DynamicAppRuntime = ({ app, user, onNotify }: { app: any, user: any, onNotify: any }) => {
     const [error, setError] = useState<any>(null);
-    const [permissionsStatus, setPermissionsStatus] = useState<Record<string, boolean>>({});
 
     const checkPermission = (perm: string) => {
         return (app.permissions || []).includes(perm);
@@ -197,10 +196,10 @@ export const DynamicAppRuntime = ({ app, onNotify }: { app: any, onNotify: any }
 
     if (error) {
         return (
-            <div className="h-full bg-red-50 p-6 flex flex-col items-center justify-center text-red-800">
+            <div className={`h-full p-6 flex flex-col items-center justify-center bg-red-950 text-red-200`}>
                 <ShieldAlert size={48} className="mb-4" />
                 <h2 className="text-xl font-bold mb-2">Runtime Error</h2>
-                <pre className="bg-red-100 p-4 rounded text-xs w-full overflow-auto max-h-40 font-mono">{error.toString()}</pre>
+                <pre className={`p-4 rounded text-xs w-full overflow-auto max-h-40 font-mono bg-red-900/50`}>{error.toString()}</pre>
             </div>
         );
     }
