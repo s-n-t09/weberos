@@ -12,7 +12,7 @@ export const DEFAULT_FS: FileSystemNode = {
         user: {
           type: 'dir',
           children: {
-            'readme.txt': { type: 'file', content: 'Welcome to WeberOS 1.6!\n\nThis is a fully functional web-based OS.\nTry the new WireBox Browser!' },
+            'readme.txt': { type: 'file', content: 'Welcome to WeberOS 1.7!\n\nThis is a fully functional web-based OS.\nTry the new WireBox Browser!' },
             'todo.txt': { type: 'file', content: '- Try WireBox\n- Check Notifications\n- Write a .wbr app with permissions' },
             'hello.wbr': { 
                 type: 'file', 
@@ -51,7 +51,7 @@ export const DEFAULT_APPS = ['explorer', 'terminal', 'wirebox', 'coder', 'snake'
 
 export const WALLPAPERS = [
   "https://images.unsplash.com/photo-1477346611705-65d1883cee1e?auto=format&fit=crop&q=80&w=2070",
-  "https://images.unsplash.com/photo-1506318137071-a8bcbf67cc77?auto=format&fit=crop&q=80&w=2070",
+  "https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&q=80&w=2072",
   "https://images.unsplash.com/photo-1518432031352-d6fc5c10da5a?auto=format&fit=crop&q=80&w=2070",
   "https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&q=80&w=2070",
   "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&q=80&w=2064",
