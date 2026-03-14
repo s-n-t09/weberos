@@ -11,11 +11,11 @@ interface WindowFrameProps {
     onFocus: () => void;
     onMove: (x: number, y: number) => void;
     onResize: (w: number, h: number) => void;
-    children: any;
+    children: React.ReactNode;
     icon?: any;
 }
 
-export const WindowFrame = ({ win, isActive, onClose, onMinimize, onMaximize, onFocus, onMove, onResize, children, icon: Icon }: WindowFrameProps) => {
+export const WindowFrame: React.FC<WindowFrameProps> = ({ win, isActive, onClose, onMinimize, onMaximize, onFocus, onMove, onResize, children, icon: Icon }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [isResizing, setIsResizing] = useState(false);
@@ -83,33 +83,33 @@ export const WindowFrame = ({ win, isActive, onClose, onMinimize, onMaximize, on
 
   return (
     <div 
-      className={`absolute flex-col bg-slate-900/90 backdrop-blur-md rounded-lg shadow-2xlyb border border-slate-700 overflow-hidden transition-all duration-75 ${isActive ? 'ring-1 ring-slate-500 z-50' : 'z-10'}`}
+      className={`absolute flex-col transition-all duration-75 overflow-hidden bg-slate-900/90 backdrop-blur-md rounded-lg shadow-2xl border border-slate-700 ${isActive ? 'ring-1 ring-slate-500 z-50' : 'z-10'}`}
       style={{ ...style, zIndex: win.zIndex, display: displayStyle }}
       onMouseDown={onFocus}
       onTouchStart={onFocus}
     >
       <div 
-        className="h-9 bg-slate-800 flex items-center justify-between px-3 select-none cursor-default shrink-0 touch-none"
+        className={`h-9 flex items-center justify-between px-3 select-none cursor-default shrink-0 touch-none transition-colors bg-slate-800`}
         onMouseDown={handleDragStart}
         onTouchStart={handleDragStart}
         onDoubleClick={onMaximize}
       >
-        <div className="flex items-center gap-2 text-sm font-medium text-slate-200">
+        <div className={`flex items-center gap-2 text-sm font-medium transition-colors text-slate-200`}>
           {Icon ? <Icon size={14} className="text-slate-400" /> : (children.props.icon && <children.props.icon size={14} className="text-slate-400" />)}
           {win.title}
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={(e) => { e.stopPropagation(); onMinimize(); }} className="p-1 hover:bg-slate-700 rounded text-slate-400 hover:text-white"><Minus size={14} /></button>
-          <button onClick={(e) => { e.stopPropagation(); onMaximize(); }} className="p-1 hover:bg-slate-700 rounded text-slate-400 hover:text-white"><Square size={12} /></button>
-          <button onClick={(e) => { e.stopPropagation(); onClose(); }} className="p-1 hover:bg-red-600 rounded text-slate-400 hover:text-white transition-colors"><X size={14} /></button>
+          <button onClick={(e) => { e.stopPropagation(); onMinimize(); }} className={`p-1 rounded transition-colors hover:bg-slate-700 text-slate-400 hover:text-white`}><Minus size={14} /></button>
+          <button onClick={(e) => { e.stopPropagation(); onMaximize(); }} className={`p-1 rounded transition-colors hover:bg-slate-700 text-slate-400 hover:text-white`}><Square size={12} /></button>
+          <button onClick={(e) => { e.stopPropagation(); onClose(); }} className={`p-1 rounded transition-colors hover:bg-red-600 text-slate-400 hover:text-white`}><X size={14} /></button>
         </div>
       </div>
-      <div className="flex-1 overflow-hidden relative bg-slate-900/50 flex flex-col">
+      <div className={`flex-1 overflow-hidden relative flex flex-col transition-colors bg-slate-900/50`}>
         {children}
       </div>
       {!win.isMaximized && !win.isMinimized && (
         <div 
-            className="absolute bottom-0 right-0 w-4 h-4 cursor-nwse-resize flex items-center justify-center z-50 text-slate-600 hover:text-slate-400 touch-none"
+            className={`absolute bottom-0 right-0 w-4 h-4 cursor-nwse-resize flex items-center justify-center z-50 transition-colors text-slate-600 hover:text-slate-400 touch-none`}
             onMouseDown={handleResizeStart}
             onTouchStart={handleResizeStart}
         >
