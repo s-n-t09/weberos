@@ -19,10 +19,13 @@ export const DesktopIcon: React.FC<DesktopIconProps> = ({ id, name, icon: Icon, 
     const hasMoved = useRef(false);
 
     useEffect(() => {
+        if (isDragging) return;
         if (savedPosition) {
             setPosition(savedPosition);
+        } else {
+            setPosition({ x: initialX, y: initialY });
         }
-    }, [savedPosition]);
+    }, [savedPosition, initialX, initialY, isDragging]);
 
     const handlePointerDown = (e: React.PointerEvent) => {
         e.stopPropagation();
