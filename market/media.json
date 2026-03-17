@@ -1,0 +1,11 @@
+[
+ {
+  "id": "wedraw",
+  "name": "WeDraw",
+  "icon": "Brush",
+  "author": "S.N.T",
+  "description": "Draw and save it",
+  "location": "market/apps/wedraw.wbr",
+  "permissions": []
+ }
+]

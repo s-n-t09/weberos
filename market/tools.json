@@ -1,0 +1,11 @@
+[
+ {
+  "id": "notesplus",
+  "name": "Notes+",
+  "icon": "StickyNote",
+  "author": "S.N.T",
+  "description": "Sticky notes with a color of classic paper",
+  "location": "market/apps/notesplus.wbr",
+  "permissions": []
+ }
+]

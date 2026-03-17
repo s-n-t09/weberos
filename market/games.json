@@ -1,0 +1,11 @@
+[
+ {
+  "id": "tictactoe",
+  "name": "Tic tac toe",
+  "icon": "Gamepad2",
+  "author": "S.N.T",
+  "description": "Play tic tac toe with simple robot",
+  "location": "market/apps/tictactoe.wbr",
+  "permissions": []
+ }
+]

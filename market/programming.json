@@ -1,0 +1,11 @@
+[
+ {
+  "id": "wesandbox",
+  "name": "WeSandBox",
+  "icon": "Code",
+  "author": "S.N.T",
+  "description": "Create wbr apps easily with live preview",
+  "location": "market/apps/wesandbox.wbr",
+  "permissions": []
+ }
+]
