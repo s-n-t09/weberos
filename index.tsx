@@ -51,6 +51,7 @@ import { WePlayerApp } from './apps/WePlayerApp';
 import { WireBoxApp } from './apps/WireBoxApp';
 import { SnakeApp, CalcoApp, WeatherApp, DynamicAppRuntime } from './apps/MiscApps';
 import { PermTesterApp } from './apps/PermTesterApp';
+import { InstallerApp } from './apps/InstallerApp';
 
 // Registry
 const SYSTEM_REGISTRY: Record<string, { name: string, icon: any, color: string }> = {
@@ -67,12 +68,13 @@ const SYSTEM_REGISTRY: Record<string, { name: string, icon: any, color: string }
   'wepic': { name: 'WePic', icon: ImageIcon, color: 'bg-pink-500' },
   'weplayer': { name: 'WePlayer', icon: Film, color: 'bg-rose-600' },
   'permtester': { name: 'Perm Tester', icon: Shield, color: 'bg-emerald-600' },
+  'installer': { name: 'Program Installer', icon: Package, color: 'bg-indigo-500' },
 };
 
 const WeberOS = () => {
   const [booting, setBooting] = useState(true);
   const [bootProgress, setBootProgress] = useState(0);
-  const [bootStatus, setBootStatus] = useState('Initializing WeberOS 1.7...');
+  const [bootStatus, setBootStatus] = useState('Initializing WeberOS 1.8...');
 
   const [user, setUserState] = useState<UserProfile | null>(null);
   const [usersList, setUsersList] = useState<UserProfile[]>([]);
@@ -94,9 +96,11 @@ const WeberOS = () => {
   const [showVolumePopup, setShowVolumePopup] = useState(false);
 
   const [notifications, setNotifications] = useState<SystemNotification[]>([]);
+  const [activePopups, setActivePopups] = useState<SystemNotification[]>([]);
   const [showNotifPanel, setShowNotifPanel] = useState(false);
 
   const [openWithRequest, setOpenWithRequest] = useState<{file: string, apps: any[]} | null>(null);
+  const [windowSize, setWindowSize] = useState({ w: window.innerWidth, h: window.innerHeight });
 
   // Boot Animation Logic
   useEffect(() => {
@@ -104,6 +108,9 @@ const WeberOS = () => {
     if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register(swUrl).catch(err => console.warn('SW registration failed:', err));
     }
+
+    const handleResize = () => setWindowSize({ w: window.innerWidth, h: window.innerHeight });
+    window.addEventListener('resize', handleResize);
 
     const steps = [
         { p: 10, s: 'Loading Kernel...' },
@@ -126,7 +133,10 @@ const WeberOS = () => {
         }
     }, 600);
     
-    return () => clearInterval(interval);
+    return () => {
+        clearInterval(interval);
+        window.removeEventListener('resize', handleResize);
+    };
   }, []);
 
   useEffect(() => {
@@ -161,13 +171,18 @@ const WeberOS = () => {
 
   const handleDesktopIconMove = (id: string, x: number, y: number) => {
       if (user) {
+          const rowHeight = 112;
+          const colWidth = 96;
+          const snappedX = Math.max(16, Math.round((x - 16) / colWidth) * colWidth + 16);
+          const snappedY = Math.max(16, Math.round((y - 16) / rowHeight) * rowHeight + 16);
+
           setUser({
               ...user,
               settings: {
                   ...user.settings,
                   desktopIcons: {
                       ...user.settings.desktopIcons,
-                      [id]: { x, y }
+                      [id]: { x: snappedX, y: snappedY }
                   }
               }
           });
@@ -194,7 +209,7 @@ const WeberOS = () => {
                 wallpaper: storedUser.settings?.wallpaper || WALLPAPERS[0], 
                 desktopIcons: storedUser.settings?.desktopIcons || {},
                 weather: storedUser.settings?.weather || { mode: 'auto' },
-                notifications: storedUser.settings?.notifications || { enabled: true, sound: true, external: true },
+                notifications: storedUser.settings?.notifications || { enabled: true, sound: true, external: false },
                 defaultApps: storedUser.settings?.defaultApps || {}
             }
         };
@@ -219,7 +234,7 @@ const WeberOS = () => {
               wallpaper: setupWallpaper, 
               desktopIcons: {},
               weather: { mode: 'auto' },
-              notifications: { enabled: true, sound: true, external: true },
+              notifications: { enabled: true, sound: true, external: false },
               defaultApps: {}
           }
       };
@@ -261,6 +276,19 @@ const WeberOS = () => {
       handleNextStep();
   };
 
+  const [hasWelcomed, setHasWelcomed] = useState(false);
+
+  useEffect(() => {
+    if (user && !hasWelcomed) {
+        setHasWelcomed(true);
+        setTimeout(() => {
+            sendNotification('system', 'Welcome', `Welcome back, ${user.username}!`);
+        }, 1000);
+    } else if (!user) {
+        setHasWelcomed(false);
+    }
+  }, [user, hasWelcomed]);
+
   const handleLogout = () => {
       setUserState(null);
       setWindows([]);
@@ -274,7 +302,7 @@ const WeberOS = () => {
       if (!user?.settings.notifications.enabled) return;
 
       const newNotif: SystemNotification = {
-          id: Date.now().toString(),
+          id: Date.now().toString() + Math.random().toString(36).substring(7),
           app: appId,
           title,
           message,
@@ -282,32 +310,38 @@ const WeberOS = () => {
           read: false
       };
       setNotifications(prev => [newNotif, ...prev]);
+      setActivePopups(prev => [...prev, newNotif]);
+      setTimeout(() => {
+          setActivePopups(prev => prev.filter(n => n.id !== newNotif.id));
+      }, 3000);
 
       if (user.settings.notifications.external && 'Notification' in window) {
           const showExternal = async () => {
               try {
+                  const triggerNotification = async () => {
+                      if ('serviceWorker' in navigator) {
+                          const registration = await navigator.serviceWorker.ready;
+                          if (registration) {
+                              await registration.showNotification(title, { body: message });
+                              return;
+                          }
+                      }
+                      new Notification(title, { body: message });
+                  };
+
                   if (Notification.permission === 'granted') {
                       try {
-                          new Notification(title, { body: message });
+                          await triggerNotification();
                       } catch (e) {
-                          // Fallback for browsers that require ServiceWorkerRegistration.showNotification()
-                          if ('serviceWorker' in navigator) {
-                              const registration = await navigator.serviceWorker.ready;
-                              registration.showNotification(title, { body: message });
-                          } else {
-                              console.warn("Notification constructor failed and no service worker ready:", e);
-                          }
+                          console.warn("External notification failed:", e);
                       }
                   } else if (Notification.permission !== 'denied') {
                       const permission = await Notification.requestPermission();
                       if (permission === 'granted') {
                           try {
-                              new Notification(title, { body: message });
+                              await triggerNotification();
                           } catch (e) {
-                              if ('serviceWorker' in navigator) {
-                                  const registration = await navigator.serviceWorker.ready;
-                                  registration.showNotification(title, { body: message });
-                              }
+                              console.warn("External notification failed:", e);
                           }
                       }
                   }
@@ -380,6 +414,35 @@ const WeberOS = () => {
     setWindows(windows.map(win => win.id === id ? { ...win, size: { w, h } } : win));
   };
 
+  const availableApps = [
+      ...DEFAULT_APPS.map(id => ({ id, ...SYSTEM_REGISTRY[id] })),
+      { id: 'upload_files', name: 'Add files', icon: Upload, color: 'bg-emerald-600' },
+      ...(user ? user.installedPackages
+         .filter(id => !SYSTEM_REGISTRY[id])
+         .map(id => {
+             if (user.customApps[id]) {
+                 return { 
+                     id, 
+                     name: user.customApps[id].name, 
+                     // @ts-ignore
+                     icon: LucideIcons[user.customApps[id].iconName] || Package,
+                     color: 'bg-indigo-600'
+                 };
+             }
+             return { id, name: id, icon: Package, color: 'bg-gray-500' };
+         }) : [])
+  ];
+
+  const sortedApps = availableApps.sort((a, b) => a.name.localeCompare(b.name));
+
+  const getAllAppsForOpenWith = () => {
+      const apps = [...availableApps];
+      if (!apps.find(a => a.id === 'installer')) {
+          apps.push({ id: 'installer', ...SYSTEM_REGISTRY['installer'] });
+      }
+      return apps.sort((a, b) => a.name.localeCompare(b.name));
+  };
+
   const launchFile = (path: string) => {
       const ext = path.split('.').pop()?.toLowerCase() || '';
       const defaultApp = user?.settings.defaultApps[ext] || FILE_ASSOCIATIONS[ext]?.[0];
@@ -387,7 +450,7 @@ const WeberOS = () => {
       if (defaultApp) {
           openApp(defaultApp, { file: path });
       } else {
-          setOpenWithRequest({ file: path, apps: (FILE_ASSOCIATIONS[ext] || DEFAULT_APPS).map(id => ({ id, ...SYSTEM_REGISTRY[id] })) });
+          setOpenWithRequest({ file: path, apps: getAllAppsForOpenWith() });
       }
   };
 
@@ -405,6 +468,23 @@ const WeberOS = () => {
           data: { mode: 'picker', onPickCallback: callback }
       };
       setWindows([...windows, pickerWin]);
+      setActiveWinId(id);
+  };
+
+  const openFileSaver = (callback: (path: string) => void) => {
+      const id = Math.random().toString(36).substring(7);
+      const saverWin: WindowState = {
+          id,
+          appId: 'explorer',
+          title: 'Save File',
+          isMinimized: false,
+          isMaximized: false,
+          zIndex: Math.max(0, ...windows.map(w => w.zIndex)) + 1,
+          position: { x: 100, y: 100 },
+          size: { w: 600, h: 400 },
+          data: { mode: 'saver', onPickCallback: callback }
+      };
+      setWindows([...windows, saverWin]);
       setActiveWinId(id);
   };
 
@@ -444,27 +524,6 @@ const WeberOS = () => {
           reader.readAsText(file);
       }
   };
-
-  const availableApps = [
-      ...DEFAULT_APPS.map(id => ({ id, ...SYSTEM_REGISTRY[id] })),
-      { id: 'upload_files', name: 'Add files', icon: Upload, color: 'bg-emerald-600' },
-      ...(user ? user.installedPackages
-         .filter(id => !SYSTEM_REGISTRY[id])
-         .map(id => {
-             if (user.customApps[id]) {
-                 return { 
-                     id, 
-                     name: user.customApps[id].name, 
-                     // @ts-ignore
-                     icon: LucideIcons[user.customApps[id].iconName] || Package,
-                     color: 'bg-indigo-600'
-                 };
-             }
-             return { id, name: id, icon: Package, color: 'bg-gray-500' };
-         }) : [])
-  ];
-
-  const sortedApps = availableApps.sort((a, b) => a.name.localeCompare(b.name));
 
   // Boot Screen
   if (booting) {
@@ -694,37 +753,81 @@ const WeberOS = () => {
         {/* Desktop Icons */}
         <div className="absolute inset-0 pointer-events-none overflow-hidden h-[calc(100%-80px)]">
             <div className="relative w-full h-full pointer-events-auto">
-                {availableApps.filter(app => !['settings', 'helper', 'wepic', 'weplayer'].includes(app.id)).map((app, index) => {
+                {(() => {
                     const rowHeight = 112; // 96 + 16
                     const colWidth = 96; // 80 + 16
-                    const maxRows = Math.max(1, Math.floor((window.innerHeight - 80 - 32) / rowHeight));
-                    const col = Math.floor(index / maxRows);
-                    const row = index % maxRows;
-                    const initialX = 16 + col * colWidth;
-                    const initialY = 16 + row * rowHeight;
+                    const maxRows = Math.max(1, Math.floor((windowSize.h - 80 - 32) / rowHeight));
                     
-                    return (
-                        <DesktopIcon
-                            key={app.id}
-                            id={app.id}
-                            name={app.name}
-                            icon={app.icon}
-                            color={app.color}
-                            initialX={initialX}
-                            initialY={initialY}
-                            savedPosition={user.settings.desktopIcons?.[app.id]}
-                            onDoubleClick={() => openApp(app.id)}
-                            onMove={handleDesktopIconMove}
-                        />
-                    );
-                })}
+                    const appsToRender = availableApps.filter(app => !['settings', 'helper', 'wepic', 'weplayer', 'installer'].includes(app.id));
+                    
+                    const occupied = new Set<string>();
+                    
+                    // First pass: mark occupied slots from saved positions
+                    // We also need to handle collisions if multiple apps have the same saved position
+                    const savedPositions = new Map<string, {x: number, y: number}>();
+                    
+                    appsToRender.forEach(app => {
+                        const saved = user?.settings.desktopIcons?.[app.id];
+                        if (saved) {
+                            const col = Math.round((saved.x - 16) / colWidth);
+                            const row = Math.round((saved.y - 16) / rowHeight);
+                            const key = `${col},${row}`;
+                            if (!occupied.has(key)) {
+                                occupied.add(key);
+                                savedPositions.set(app.id, {
+                                    x: 16 + col * colWidth,
+                                    y: 16 + row * rowHeight
+                                });
+                            }
+                        }
+                    });
+
+                    let nextCol = 0;
+                    let nextRow = 0;
+
+                    return appsToRender.map((app) => {
+                        let x, y;
+                        const saved = savedPositions.get(app.id);
+                        if (saved) {
+                            x = saved.x;
+                            y = saved.y;
+                        } else {
+                            // Find next available slot
+                            while (occupied.has(`${nextCol},${nextRow}`)) {
+                                nextRow++;
+                                if (nextRow >= maxRows) {
+                                    nextRow = 0;
+                                    nextCol++;
+                                }
+                            }
+                            x = 16 + nextCol * colWidth;
+                            y = 16 + nextRow * rowHeight;
+                            occupied.add(`${nextCol},${nextRow}`);
+                        }
+
+                        return (
+                            <DesktopIcon
+                                key={app.id}
+                                id={app.id}
+                                name={app.name}
+                                icon={app.icon}
+                                color={app.color}
+                                initialX={x}
+                                initialY={y}
+                                savedPosition={saved ? { x, y } : undefined}
+                                onDoubleClick={() => openApp(app.id)}
+                                onMove={handleDesktopIconMove}
+                            />
+                        );
+                    });
+                })()}
             </div>
         </div>
 
         {/* Windows */}
         {windows.map(win => {
             let AppContent;
-            if (win.appId === 'terminal') AppContent = <TerminalApp fs={fs} setFs={setFs} user={user} setUser={setUser} />;
+            if (win.appId === 'terminal') AppContent = <TerminalApp fs={fs} setFs={setFs} user={user} setUser={setUser} onNotify={sendNotification} />;
             else if (win.appId === 'coder') AppContent = <CoderApp fs={fs} setFs={setFs} launchData={win.data} />;
             else if (win.appId === 'explorer') AppContent = <ExplorerApp 
                 fs={fs} 
@@ -736,20 +839,32 @@ const WeberOS = () => {
                     closeWindow(win.id);
                 }} 
                 onOpen={launchFile}
+                onOpenWith={(path: string) => {
+                    setOpenWithRequest({ file: path, apps: getAllAppsForOpenWith() });
+                }}
             />;
             else if (win.appId === 'snake') AppContent = <SnakeApp user={user} />;
             else if (win.appId === 'calco') AppContent = <CalcoApp user={user} />;
             else if (win.appId === 'weather') AppContent = <WeatherApp user={user} setUser={setUser} />;
             else if (win.appId === 'settings') AppContent = <SettingsApp user={user} setUser={setUser} onDeleteUser={deleteUser} />;
-            else if (win.appId === 'market') AppContent = <MarketApp user={user} setUser={setUser} />;
+            else if (win.appId === 'market') AppContent = <MarketApp user={user} setUser={setUser} onNotify={sendNotification} />;
             else if (win.appId === 'helper') AppContent = <HelperApp />;
             else if (win.appId === 'wepic') AppContent = <WePicApp fs={fs} launchData={win.data} openFilePicker={openFilePicker} />;
             else if (win.appId === 'weplayer') AppContent = <WePlayerApp fs={fs} launchData={win.data} openFilePicker={openFilePicker} volume={volume} />;
             else if (win.appId === 'wirebox') AppContent = <WireBoxApp user={user} setUser={setUser} openApp={openApp} />;
             else if (win.appId === 'permtester') AppContent = <PermTesterApp />;
+            else if (win.appId === 'installer') AppContent = <InstallerApp fs={fs} launchData={win.data} user={user} setUser={setUser} onNotify={sendNotification} closeWindow={() => closeWindow(win.id)} />;
             
             else if (user.customApps[win.appId]) {
-                AppContent = <DynamicAppRuntime app={user.customApps[win.appId]} user={user} onNotify={sendNotification} />;
+                AppContent = <DynamicAppRuntime 
+                    app={user.customApps[win.appId]} 
+                    user={user} 
+                    onNotify={sendNotification} 
+                    fs={fs}
+                    setFs={setFs}
+                    openFilePicker={openFilePicker}
+                    openFileSaver={openFileSaver}
+                />;
             }
             else AppContent = <div className="h-full flex items-center justify-center">Unknown App</div>;
 
@@ -847,6 +962,26 @@ const WeberOS = () => {
                 </div>
             </div>
         )}
+
+        {/* Notification Popups */}
+        <div className="fixed bottom-20 right-4 z-[200] flex flex-col gap-2 items-end pointer-events-none">
+            {activePopups.map(popup => {
+                const app = availableApps.find(a => a.id === popup.app);
+                const AppIcon = app ? app.icon : Package;
+                return (
+                    <div key={popup.id} className="bg-slate-900/90 backdrop-blur-xl border border-white/10 p-4 rounded-2xl shadow-2xl w-80 pointer-events-auto animate-in slide-in-from-right-8 fade-in duration-300">
+                        <div className="flex items-center gap-2 mb-2">
+                            <div className={`p-1.5 rounded-lg shadow-sm ${app?.color || 'bg-slate-700'}`}>
+                                <AppIcon size={14} className="text-white" />
+                            </div>
+                            <span className="text-xs font-bold uppercase tracking-wider text-slate-300">{app?.name || popup.app}</span>
+                        </div>
+                        <div className="font-bold text-sm text-white mb-1">{popup.title}</div>
+                        <div className="text-xs text-slate-400">{popup.message}</div>
+                    </div>
+                );
+            })}
+        </div>
 
         {/* Taskbar */}
         <div className={`fixed bottom-4 left-4 right-4 h-14 backdrop-blur-2xl border rounded-2xl flex items-center px-4 justify-between z-[150] shadow-2xl transition-colors bg-slate-900/80 border-white/10`}>

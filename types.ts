@@ -24,6 +24,7 @@ export type CustomApp = {
     id: string;
     name: string;
     iconName: string;
+    version?: string;
     permissions?: SystemPermission[];
     code: string; 
 };

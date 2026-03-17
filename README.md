@@ -3,7 +3,7 @@
   <a href="https://github.com/s-n-t09/weberos">
     <img src="/logo.png" alt="WeberOS Logo" width="125" height="125">
   </a>
-  <h1 align="center">WeberOS v1.7</h1>
+  <h1 align="center">WeberOS v1.8</h1>
 
   <p align="center">
     <strong>Next-Gen Web-Based Operating System Simulator</strong>
@@ -165,17 +165,25 @@ WeberOS supports a unique feature called **Weber Runtime (.wbr)**. You can write
   "id": "my-custom-app",
   "name": "My App",
   "icon": "Star",
+  "version": "1.0.0",
   "code": "return () => React.createElement('div', {className: 'flex items-center justify-center h-full text-2xl font-bold'}, 'Hello World!')"
 }
 ```
 
 Open this file in **WeberOS Explorer** to install and run it!
 
+### 🛒 Publishing to the Market
+To publish your app to the WeberOS Market:
+1. Fork the [WeberOS repository](https://github.com/s-n-t09/weberos).
+2. Add your `.wbr` file to the `market/apps/` directory.
+3. Update the appropriate category JSON file in `market/` (e.g., `programming.json`, `games.json`) to include your app's metadata (id, name, description, author, version, and the path to your `.wbr` file).
+4. Submit a Pull Request!
+
 ---
 
-## 🛡️ API Permissions (v1.7)
+## 🛡️ API Permissions (v1.8)
 
-In version 1.7, you can request system permissions in your `.wbr` manifest to access advanced features.
+In version 1.8, you can request system permissions in your `.wbr` manifest to access advanced features.
 
 | Permission | Description | API Access |
 | :--- | :--- | :--- |
@@ -190,6 +198,7 @@ In version 1.7, you can request system permissions in your `.wbr` manifest to ac
   "id": "secure-app",
   "name": "Secure App",
   "icon": "Shield",
+  "version": "1.0.0",
   "permissions": ["notifications", "camera"],
   "code": "return () => React.createElement('button', { onClick: () => Sys.notify('Hello', 'Permission granted!') }, 'Notify Me')"
 }
