@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { User, Palette, HardDrive, Download, Upload, Cpu, AlertCircle, Trash2, CheckCircle2, Bell, AppWindow } from 'lucide-react';
+import { User, Palette, HardDrive, Download, Upload, Cpu, AlertCircle, Trash2, CheckCircle2, Bell, AppWindow, Github } from 'lucide-react';
 import { WALLPAPERS, FILE_ASSOCIATIONS, DEFAULT_APPS } from '../utils/constants';
 import { osAlert, osConfirm } from '../components/DialogHost';
 
@@ -11,7 +11,7 @@ export const SettingsApp = ({ user, setUser, onDeleteUser }: any) => {
     };
 
     const toggleNotificationSetting = (key: string) => {
-        const current = user.settings.notifications || { enabled: true, sound: true, external: true };
+        const current = user.settings.notifications || { enabled: true, sound: true, external: false };
         setUser({
             ...user,
             settings: {
@@ -74,7 +74,7 @@ export const SettingsApp = ({ user, setUser, onDeleteUser }: any) => {
         }
     };
 
-    const notifSettings = user.settings.notifications || { enabled: true, sound: true, external: true };
+    const notifSettings = user.settings.notifications || { enabled: true, sound: true, external: false };
 
     return (
         <div className={`h-full flex overflow-hidden transition-colors bg-slate-100 text-slate-800`}>
@@ -127,11 +127,16 @@ export const SettingsApp = ({ user, setUser, onDeleteUser }: any) => {
                             <h3 className={`font-bold mb-4 flex items-center gap-2 transition-colors text-slate-900`}><Cpu size={18}/> System Info</h3>
                             <div className="space-y-2 text-sm">
                                 <div className={`flex justify-between border-b pb-1 transition-colors border-slate-100`}>
-                                    <span className="text-slate-500">OS Version</span><span className="text-slate-900">WeberOS 1.7.0</span>
+                                    <span className="text-slate-500">OS Version</span><span className="text-slate-900">WeberOS 1.8.0</span>
                                 </div>
                                 <div className={`flex justify-between border-b pb-1 transition-colors border-slate-100`}>
                                     <span className="text-slate-500">Storage Used</span><span className="text-slate-900">{JSON.stringify(user.fs).length} bytes</span>
                                 </div>
+                            </div>
+                            <div className="mt-4">
+                                <button onClick={() => window.open('https://github.com/s-n-t09/weberos', '_blank')} className="w-full bg-slate-900 text-white p-2 rounded flex items-center justify-center gap-2 hover:bg-slate-800 transition shadow-sm">
+                                    <Github size={16} /> Show source in GitHub
+                                </button>
                             </div>
                         </div>
 

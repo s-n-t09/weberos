@@ -13,7 +13,18 @@ export const PermTesterApp = () => {
             const permission = await Notification.requestPermission();
             setResults(prev => ({ ...prev, notifications: permission }));
             if (permission === 'granted') {
-                new Notification('Permissions Tester', { body: 'Notifications are working!' });
+                try {
+                    if ('serviceWorker' in navigator) {
+                        const registration = await navigator.serviceWorker.ready;
+                        if (registration) {
+                            await registration.showNotification('Permissions Tester', { body: 'Notifications are working!' });
+                            return;
+                        }
+                    }
+                    new Notification('Permissions Tester', { body: 'Notifications are working!' });
+                } catch (err) {
+                    throw err;
+                }
             }
         } catch (e: any) {
             setResults(prev => ({ ...prev, notifications: `Error: ${e.message}` }));

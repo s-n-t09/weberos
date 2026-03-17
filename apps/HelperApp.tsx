@@ -58,10 +58,24 @@ export const HelperApp = () => {
   "id": "my-app",
   "name": "My Cool App",
   "icon": "Star",
-  "code": "return () => React.createElement('h1', null, 'Hello World')"
+  "version": "1.0.0",
+  "permissions": ["notifications", "fs"],
+  "code": "return function MyApp() { return React.createElement('h1', null, 'Hello World'); }"
 }`}
                         </pre>
-                        <p className="mt-4">The <code>code</code> field must be a function body that returns a React Component. You have access to <code>React</code> and <code>LucideIcons</code> globals.</p>
+                        <p className="mt-4">The <code>code</code> field must be a function body that returns a React Component. You have access to <code>React</code>, <code>LucideIcons</code>, and <code>Sys</code> globals.</p>
+                        <h3 className="text-xl font-bold mt-6 mb-2">The Sys API</h3>
+                        <p className="mb-2">The <code>Sys</code> object provides access to OS features. You must declare the required permissions in your app's <code>permissions</code> array.</p>
+                        <ul className="list-disc pl-6 space-y-2">
+                            <li><code>Sys.notify(title, msg)</code> - Shows a system notification (requires <code>notifications</code>).</li>
+                            <li><code>Sys.requestCamera()</code> - Returns a Promise resolving to a MediaStream (requires <code>camera</code>).</li>
+                            <li><code>Sys.requestMic()</code> - Returns a Promise resolving to a MediaStream (requires <code>microphone</code>).</li>
+                            <li><code>Sys.getLocation()</code> - Returns a Promise resolving to GeolocationPosition (requires <code>geolocation</code>).</li>
+                            <li><code>Sys.fs.readFile(path)</code> - Reads a file from the OS filesystem (requires <code>fs</code>).</li>
+                            <li><code>Sys.fs.writeFile(path, content)</code> - Writes a file to the OS filesystem (requires <code>fs</code>).</li>
+                            <li><code>Sys.fs.openFilePicker()</code> - Opens the file explorer to pick a file. Returns a Promise resolving to the selected path (requires <code>fs</code>).</li>
+                            <li><code>Sys.fs.openFileSaver()</code> - Opens the file explorer to save a file. Returns a Promise resolving to the chosen path (requires <code>fs</code>).</li>
+                        </ul>
                     </div>
                 )}
             </div>

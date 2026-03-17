@@ -8,9 +8,10 @@ interface TerminalAppProps {
     setFs: (fs: FileSystemNode) => void;
     user: UserProfile;
     setUser: (u: UserProfile) => void;
+    onNotify?: (appId: string, title: string, message: string) => void;
 }
 
-export const TerminalApp = ({ fs, setFs, user, setUser }: TerminalAppProps) => {
+export const TerminalApp = ({ fs, setFs, user, setUser, onNotify }: TerminalAppProps) => {
   const [path, setPath] = useState(USER_HOME_PATH);
   const [input, setInput] = useState('');
   const [history, setHistory] = useState<string[]>(['Welcome to WeberOS Terminal v2.0', 'Type "help" for a list of commands.']);
@@ -131,10 +132,17 @@ export const TerminalApp = ({ fs, setFs, user, setUser }: TerminalAppProps) => {
                     try {
                         const pkgData = JSON.parse(node.content || '{}');
                         if (pkgData.id && pkgData.name && pkgData.code) {
-                            output = `Installing local package ${pkgData.name}... Success!`;
-                            const newCustomApps = { ...user.customApps, [pkgData.id]: { id: pkgData.id, name: pkgData.name, iconName: pkgData.icon || 'Box', code: pkgData.code, permissions: pkgData.permissions || [] }};
+                            const existingApp = user.customApps[pkgData.id];
+                            const isUpgrade = existingApp && existingApp.version !== pkgData.version;
+                            
+                            output = isUpgrade 
+                                ? `Upgrading local package ${pkgData.name} from v${existingApp.version || 'Unknown'} to v${pkgData.version || 'Unknown'}... Success!`
+                                : `Installing local package ${pkgData.name}... Success!`;
+                                
+                            const newCustomApps = { ...user.customApps, [pkgData.id]: { id: pkgData.id, name: pkgData.name, iconName: pkgData.icon || 'Box', version: pkgData.version, code: pkgData.code, permissions: pkgData.permissions || [] }};
                             const newPkgs = user.installedPackages.includes(pkgData.id) ? user.installedPackages : [...user.installedPackages, pkgData.id];
                             setUser({...user, installedPackages: newPkgs, customApps: newCustomApps});
+                            if (onNotify) onNotify('terminal', isUpgrade ? 'App Upgraded' : 'App Installed', `${pkgData.name} ${isUpgrade ? 'upgraded' : 'installed'} successfully.`);
                         } else output = 'Error: Invalid .wbr package.';
                     } catch (e) { output = 'Error: Failed to parse package.'; }
                 } else output = `File not found: ${pkgName}`;
@@ -147,6 +155,7 @@ export const TerminalApp = ({ fs, setFs, user, setUser }: TerminalAppProps) => {
                         output = `Installed ${pkgName}.`;
                         const newPkgs = [...user.installedPackages, pkgName];
                         setUser({...user, installedPackages: newPkgs});
+                        if (onNotify) onNotify('terminal', 'App Installed', `${pkgName} installed successfully.`);
                     }
                 } else output = `Package not found in repo.`;
             }
@@ -160,10 +169,15 @@ export const TerminalApp = ({ fs, setFs, user, setUser }: TerminalAppProps) => {
                 const newCustomApps = { ...user.customApps };
                 delete newCustomApps[pkgName];
                 setUser({...user, installedPackages: newPkgs, customApps: newCustomApps});
+                if (onNotify) onNotify('terminal', 'App Removed', `${pkgName} was removed.`);
                 output = `Removed ${pkgName}.`;
             }
         } else if (subCmd === 'list') {
-            output = 'Installed Packages:\n' + (user.installedPackages.length ? user.installedPackages.join('\n') : '(none)');
+            const pkgsWithVersions = user.installedPackages.map((pkg: string) => {
+                const customApp = user.customApps[pkg];
+                return customApp && customApp.version ? `${pkg} (v${customApp.version})` : pkg;
+            });
+            output = 'Installed Packages:\n' + (pkgsWithVersions.length ? pkgsWithVersions.join('\n') : '(none)');
         } else {
             output = 'Usage: wpm <install|remove|list>';
         }

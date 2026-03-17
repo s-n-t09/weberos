@@ -9,17 +9,28 @@ interface ExplorerAppProps {
     fs: FileSystemNode;
     setFs: (fs: FileSystemNode) => void;
     user: UserProfile;
-    mode?: 'normal' | 'picker';
+    mode?: 'normal' | 'picker' | 'saver';
     onPick?: (path: string) => void;
     onOpen?: (path: string) => void;
+    onOpenWith?: (path: string) => void;
 }
 
-export const ExplorerApp = ({ fs, setFs, user, mode = 'normal', onPick, onOpen }: ExplorerAppProps) => {
+export const ExplorerApp = ({ fs, setFs, user, mode = 'normal', onPick, onOpen, onOpenWith }: ExplorerAppProps) => {
     const [path, setPath] = useState(USER_HOME_PATH);
     const [selected, setSelected] = useState<string | null>(null);
     const [clipboard, setClipboard] = useState<{ type: 'copy' | 'cut', path: string[], node: FileSystemNode } | null>(null);
+    const [contextMenu, setContextMenu] = useState<{x: number, y: number, file: string} | null>(null);
+    const [saveFileName, setSaveFileName] = useState<string>('');
 
     const dirContents = getDirContents(fs, path) || {};
+
+    React.useEffect(() => {
+        const contents = getDirContents(fs, path) || {};
+        if (selected && contents[selected]?.type === 'file') {
+            setSaveFileName(selected);
+        }
+    }, [selected, fs, path]);
+
     const sortedItems = Object.entries(dirContents).sort((a, b) => {
         if (a[1].type === b[1].type) return a[0].localeCompare(b[0]);
         return a[1].type === 'dir' ? -1 : 1;
@@ -167,8 +178,19 @@ export const ExplorerApp = ({ fs, setFs, user, mode = 'normal', onPick, onOpen }
         }
     };
 
+    const handleContextMenu = (e: React.MouseEvent, name: string, type: 'dir' | 'file') => {
+        e.preventDefault();
+        e.stopPropagation();
+        setSelected(name);
+        if (type === 'file' && mode === 'normal') {
+            setContextMenu({ x: e.clientX, y: e.clientY, file: name });
+        }
+    };
+
+    const closeContextMenu = () => setContextMenu(null);
+
     return (
-        <div className="flex flex-col h-full bg-slate-100 text-slate-800">
+        <div className="flex flex-col h-full bg-slate-100 text-slate-800" onClick={closeContextMenu} onContextMenu={(e) => { e.preventDefault(); closeContextMenu(); }}>
             {/* Toolbar */}
             <div className="bg-slate-200 border-b border-slate-300 p-2 flex items-center gap-1 text-sm flex-wrap">
                 <button onClick={handleUp} disabled={path.length <= USER_HOME_PATH.length} className="p-1.5 rounded hover:bg-slate-300 disabled:opacity-30 transition"><ArrowUp size={16}/></button>
@@ -221,8 +243,9 @@ export const ExplorerApp = ({ fs, setFs, user, mode = 'normal', onPick, onOpen }
                 {sortedItems.map(([name, node]) => (
                     <div 
                         key={name}
-                        onClick={(e) => { e.stopPropagation(); setSelected(name); }}
+                        onClick={(e) => { e.stopPropagation(); closeContextMenu(); setSelected(name); }}
                         onDoubleClick={() => handleNavigate(name, node.type)}
+                        onContextMenu={(e) => handleContextMenu(e, name, node.type)}
                         className={`flex flex-col items-center gap-1 group cursor-pointer p-2 rounded transition border ${selected === name ? 'bg-blue-200 border-blue-300' : 'hover:bg-slate-200 border-transparent'} ${clipboard?.path.includes(name) && clipboard.path.join('/') === [...path, name].join('/') && clipboard.type === 'cut' ? 'opacity-50' : ''}`}
                     >
                         <div className={`w-12 h-12 flex items-center justify-center ${node.type === 'dir' ? 'text-yellow-500' : 'text-slate-500'}`}>
@@ -234,10 +257,90 @@ export const ExplorerApp = ({ fs, setFs, user, mode = 'normal', onPick, onOpen }
                     </div>
                 ))}
             </div>
-            <div className="bg-slate-200 p-1 px-3 text-xs text-slate-500 border-t border-slate-300 flex justify-between">
+            <div className="bg-slate-200 p-1 px-3 text-xs text-slate-500 border-t border-slate-300 flex justify-between items-center">
                 <span>{sortedItems.length} items</span>
-                <span>{selected ? selected : 'No selection'}</span>
+                {mode === 'saver' ? (
+                    <div className="flex items-center gap-2">
+                        <input 
+                            type="text" 
+                            value={saveFileName} 
+                            onChange={e => setSaveFileName(e.target.value)} 
+                            placeholder="Filename..." 
+                            className="px-2 py-1 border border-slate-300 rounded outline-none focus:border-blue-500"
+                        />
+                        <button 
+                            onClick={() => {
+                                if (saveFileName && onPick) {
+                                    onPick([...path, saveFileName].join('/'));
+                                }
+                            }}
+                            disabled={!saveFileName}
+                            className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 font-bold disabled:opacity-50"
+                        >
+                            Save
+                        </button>
+                    </div>
+                ) : (
+                    <span>{selected ? selected : 'No selection'}</span>
+                )}
             </div>
+
+            {contextMenu && (
+                <div 
+                    className="fixed z-50 bg-white border border-slate-300 shadow-lg rounded py-1 min-w-[150px]"
+                    style={{ left: contextMenu.x, top: contextMenu.y }}
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <button 
+                        className="w-full text-left px-4 py-2 text-sm hover:bg-blue-50 text-slate-700"
+                        onClick={() => {
+                            if (onOpen) onOpen([...path, contextMenu.file].join('/'));
+                            closeContextMenu();
+                        }}
+                    >
+                        Open
+                    </button>
+                    {onOpenWith && (
+                        <button 
+                            className="w-full text-left px-4 py-2 text-sm hover:bg-blue-50 text-slate-700"
+                            onClick={() => {
+                                onOpenWith([...path, contextMenu.file].join('/'));
+                                closeContextMenu();
+                            }}
+                        >
+                            Open With...
+                        </button>
+                    )}
+                    <div className="h-px bg-slate-200 my-1"></div>
+                    <button 
+                        className="w-full text-left px-4 py-2 text-sm hover:bg-blue-50 text-slate-700"
+                        onClick={() => {
+                            handleCopy();
+                            closeContextMenu();
+                        }}
+                    >
+                        Copy
+                    </button>
+                    <button 
+                        className="w-full text-left px-4 py-2 text-sm hover:bg-blue-50 text-slate-700"
+                        onClick={() => {
+                            handleCut();
+                            closeContextMenu();
+                        }}
+                    >
+                        Cut
+                    </button>
+                    <button 
+                        className="w-full text-left px-4 py-2 text-sm hover:bg-red-50 text-red-600"
+                        onClick={() => {
+                            handleDelete();
+                            closeContextMenu();
+                        }}
+                    >
+                        Delete
+                    </button>
+                </div>
+            )}
         </div>
     );
 };

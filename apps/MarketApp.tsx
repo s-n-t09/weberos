@@ -4,7 +4,7 @@ import * as LucideIcons from 'lucide-react';
 import { UserProfile } from '../types';
 import { osAlert } from '../components/DialogHost';
 
-export const MarketApp = ({ user, setUser }: { user: UserProfile, setUser: (u: UserProfile) => void }) => {
+export const MarketApp = ({ user, setUser, onNotify }: { user: UserProfile, setUser: (u: UserProfile) => void, onNotify?: (appId: string, title: string, message: string) => void }) => {
     const [activeCategory, setActiveCategory] = useState('All');
     const [marketApps, setMarketApps] = useState<any[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
@@ -12,14 +12,6 @@ export const MarketApp = ({ user, setUser }: { user: UserProfile, setUser: (u: U
 
     useEffect(() => {
         const loadMarketData = async () => {
-            const categoryFiles: Record<string, string> = {
-                'Programming': '/programming.json',
-                'Media': '/media.json',
-                'Games': '/games.json',
-                'Tools': '/tools.json',
-                'Other': '/other.json'
-            };
-
             const colors: Record<string, string> = {
                 'Programming': 'bg-indigo-500',
                 'Media': 'bg-pink-500',
@@ -30,24 +22,27 @@ export const MarketApp = ({ user, setUser }: { user: UserProfile, setUser: (u: U
 
             let allApps: any[] = [];
             
-            for (const [cat, fileName] of Object.entries(categoryFiles)) {
-                try {
-                    const response = await fetch(fileName);
-                    if (response.ok) {
-                        const apps = await response.json();
-                        if (Array.isArray(apps)) {
-                            const appsWithMeta = apps.map(app => ({
-                                ...app,
-                                category: cat,
-                                color: colors[cat] || 'bg-slate-500'
-                            }));
-                            allApps = [...allApps, ...appsWithMeta];
-                        }
+            try {
+                const categoryModules = import.meta.glob('/market/*.json', { eager: true });
+                
+                for (const [path, module] of Object.entries(categoryModules)) {
+                    const catName = path.split('/').pop()?.replace('.json', '');
+                    const cat = catName ? catName.charAt(0).toUpperCase() + catName.slice(1) : 'Other';
+                    
+                    const apps = (module as any).default || module;
+                    if (Array.isArray(apps)) {
+                        const appsWithMeta = apps.map(app => ({
+                            ...app,
+                            category: cat,
+                            color: colors[cat] || 'bg-slate-500'
+                        }));
+                        allApps = [...allApps, ...appsWithMeta];
                     }
-                } catch (e) {
-                    console.error(`Failed to fetch ${fileName}`, e);
                 }
+            } catch (e) {
+                console.error('Failed to load market data', e);
             }
+            
             setMarketApps(allApps);
         };
 
@@ -62,14 +57,55 @@ export const MarketApp = ({ user, setUser }: { user: UserProfile, setUser: (u: U
     });
 
     const handleInstall = async (app: any) => {
-        if (user.installedPackages.includes(app.id)) {
+        const isInstalled = user.installedPackages.includes(app.id);
+        const existingApp = user.customApps[app.id];
+        const isUpgrade = isInstalled && existingApp?.version && app.version && existingApp.version !== app.version;
+
+        if (isInstalled && !isUpgrade) {
             await osAlert('App is already installed!');
             return;
         }
-        const newCustomApps = { ...user.customApps, [app.id]: { id: app.id, name: app.name, iconName: app.icon, code: app.code, permissions: app.permissions || [] }};
-        const newPkgs = [...user.installedPackages, app.id];
+
+        let code = app.code;
+        let permissions = app.permissions || [];
+        let version = app.version;
+
+        if (!code && app.location) {
+            try {
+                const wbrModules = import.meta.glob('/market/apps/*.wbr', { query: '?raw', import: 'default' });
+                const wbrPath = app.location.startsWith('/') ? app.location : `/${app.location}`;
+                
+                if (wbrModules[wbrPath]) {
+                    const rawData = await wbrModules[wbrPath]();
+                    const wbrData = JSON.parse(rawData as string);
+                    code = wbrData.code;
+                    if (wbrData.permissions) permissions = wbrData.permissions;
+                    if (wbrData.version) version = wbrData.version;
+                } else {
+                    const fetchUrl = wbrPath;
+                    const res = await fetch(fetchUrl);
+                    if (!res.ok) throw new Error('Failed to download app code');
+                    const wbrData = await res.json();
+                    code = wbrData.code;
+                    if (wbrData.permissions) {
+                        permissions = wbrData.permissions;
+                    }
+                    if (wbrData.version) {
+                        version = wbrData.version;
+                    }
+                }
+            } catch (e) {
+                console.error(e);
+                await osAlert(`Failed to download ${app.name}`);
+                return;
+            }
+        }
+
+        const newCustomApps = { ...user.customApps, [app.id]: { id: app.id, name: app.name, iconName: app.icon, version: version, code: code, permissions: permissions }};
+        const newPkgs = isInstalled ? user.installedPackages : [...user.installedPackages, app.id];
         setUser({...user, installedPackages: newPkgs, customApps: newCustomApps});
-        await osAlert(`${app.name} installed successfully!`);
+        if (onNotify) onNotify('market', isUpgrade ? 'App Upgraded' : 'App Installed', `${app.name} ${isUpgrade ? 'upgraded' : 'installed'} successfully!`);
+        await osAlert(`${app.name} ${isUpgrade ? 'upgraded' : 'installed'} successfully!`);
     };
 
     return (
@@ -125,6 +161,8 @@ export const MarketApp = ({ user, setUser }: { user: UserProfile, setUser: (u: U
                         {filteredApps.map(app => {
                             const Icon = (LucideIcons as any)[app.icon] || Package;
                             const isInstalled = user.installedPackages.includes(app.id);
+                            const existingApp = user.customApps[app.id];
+                            const isUpgrade = isInstalled && existingApp?.version && app.version && existingApp.version !== app.version;
 
                             return (
                                 <div key={app.id} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow flex flex-col">
@@ -136,15 +174,15 @@ export const MarketApp = ({ user, setUser }: { user: UserProfile, setUser: (u: U
                                             {app.category}
                                         </span>
                                     </div>
-                                    <h3 className="font-bold text-lg text-slate-900 mb-0.5">{app.name}</h3>
+                                    <h3 className="font-bold text-lg text-slate-900 mb-0.5">{app.name} {app.version ? <span className="text-xs text-slate-400 font-normal ml-1">v{app.version}</span> : null}</h3>
                                     <div className="text-[10px] text-blue-600 font-medium mb-2">by {app.author || 'Unknown'}</div>
                                     <p className="text-sm text-slate-500 mb-6 flex-1 line-clamp-3">{app.description}</p>
                                     <button 
                                         onClick={() => handleInstall(app)}
-                                        disabled={isInstalled}
-                                        className={`w-full py-2.5 rounded-xl font-bold text-sm transition-all ${isInstalled ? 'bg-slate-100 text-slate-400 cursor-default' : 'bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-200'}`}
+                                        disabled={isInstalled && !isUpgrade}
+                                        className={`w-full py-2.5 rounded-xl font-bold text-sm transition-all ${isInstalled && !isUpgrade ? 'bg-slate-100 text-slate-400 cursor-default' : 'bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-200'}`}
                                     >
-                                        {isInstalled ? 'Installed' : 'Install'}
+                                        {isInstalled ? (isUpgrade ? 'Update' : 'Installed') : 'Install'}
                                     </button>
                                 </div>
                             );

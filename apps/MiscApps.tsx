@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, Component } from 'react';
 import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight, MapPin, MoreVertical, Search, CloudSun, RefreshCw, ShieldAlert, Camera, Mic, Bell } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 
@@ -158,7 +158,44 @@ export const WeatherApp = ({ user, setUser }: any) => {
     );
 };
 
-export const DynamicAppRuntime = ({ app, user, onNotify }: { app: any, user: any, onNotify: any }) => {
+class ErrorBoundary extends React.Component<{children: React.ReactNode, key?: any}, {hasError: boolean, error: any}> {
+    state = { hasError: false, error: null };
+    constructor(props: {children: React.ReactNode, key?: any}) {
+        super(props);
+    }
+    static getDerivedStateFromError(error: any) {
+        return { hasError: true, error };
+    }
+    componentDidCatch(error: any, errorInfo: any) {
+        console.error("App Error:", error, errorInfo);
+    }
+    render() {
+        // @ts-ignore
+        if (this.state.hasError) {
+            return (
+                <div className="h-full p-6 flex flex-col items-center justify-center bg-red-950 text-red-200">
+                    <ShieldAlert size={48} className="mb-4" />
+                    <h2 className="text-xl font-bold mb-2">App Crashed</h2>
+                    <pre className="p-4 rounded text-xs w-full overflow-auto max-h-40 font-mono bg-red-900/50">
+                        {/* @ts-ignore */}
+                        {this.state.error?.toString()}
+                    </pre>
+                    <button 
+                        className="mt-4 px-4 py-2 bg-red-800 hover:bg-red-700 rounded text-white"
+                        // @ts-ignore
+                        onClick={() => this.setState({hasError: false, error: null})}
+                    >
+                        Try Again
+                    </button>
+                </div>
+            );
+        }
+        // @ts-ignore
+        return this.props.children;
+    }
+}
+
+export const DynamicAppRuntime = ({ app, user, onNotify, fs, setFs, openFilePicker, openFileSaver }: { app: any, user: any, onNotify: any, fs?: any, setFs?: any, openFilePicker?: any, openFileSaver?: any }) => {
     const [error, setError] = useState<any>(null);
 
     const checkPermission = (perm: string) => {
@@ -181,16 +218,70 @@ export const DynamicAppRuntime = ({ app, user, onNotify }: { app: any, user: any
         getLocation: async () => {
             if (!checkPermission('geolocation')) throw new Error("Permission 'geolocation' not declared in app manifest.");
             return new Promise((res, rej) => navigator.geolocation.getCurrentPosition(res, rej));
+        },
+        fs: {
+            readFile: (path: string) => {
+                if (!checkPermission('fs')) throw new Error("Permission 'fs' not declared in app manifest.");
+                if (!fs) throw new Error("File system not available.");
+                const parts = path.split('/').filter(Boolean);
+                let current = fs;
+                for (const p of parts) {
+                    if (current.children && current.children[p]) {
+                        current = current.children[p];
+                    } else {
+                        throw new Error(`File not found: ${path}`);
+                    }
+                }
+                if (current.type !== 'file') throw new Error(`Not a file: ${path}`);
+                return current.content;
+            },
+            writeFile: (path: string, content: string) => {
+                if (!checkPermission('fs')) throw new Error("Permission 'fs' not declared in app manifest.");
+                if (!fs || !setFs) throw new Error("File system not available.");
+                const parts = path.split('/').filter(Boolean);
+                const fileName = parts.pop();
+                if (!fileName) throw new Error("Invalid path");
+                let current = fs;
+                for (const p of parts) {
+                    if (current.children && current.children[p]) {
+                        current = current.children[p];
+                    } else {
+                        throw new Error(`Directory not found: ${parts.join('/')}`);
+                    }
+                }
+                if (current.type !== 'dir' || !current.children) throw new Error(`Not a directory: ${parts.join('/')}`);
+                current.children[fileName] = { type: 'file', content };
+                setFs({ ...fs });
+            },
+            openFilePicker: () => {
+                if (!checkPermission('fs')) throw new Error("Permission 'fs' not declared in app manifest.");
+                if (!openFilePicker) throw new Error("File picker not available.");
+                return new Promise(resolve => openFilePicker(resolve));
+            },
+            openFileSaver: () => {
+                if (!checkPermission('fs')) throw new Error("Permission 'fs' not declared in app manifest.");
+                if (!openFileSaver) throw new Error("File saver not available.");
+                return new Promise(resolve => openFileSaver(resolve));
+            }
         }
     };
 
     const Component = useMemo(() => {
         try {
             const func = new Function('React', 'LucideIcons', 'Sys', app.code);
-            return func(React, LucideIcons, Sys);
-        } catch (e) {
-            setError(e);
-            return null;
+            const res = func(React, LucideIcons, Sys);
+            if (typeof res === 'function') {
+                return res;
+            }
+            return () => res;
+        } catch (e: any) {
+            return () => (
+                <div className={`h-full p-6 flex flex-col items-center justify-center bg-red-950 text-red-200`}>
+                    <ShieldAlert size={48} className="mb-4" />
+                    <h2 className="text-xl font-bold mb-2">Runtime Error</h2>
+                    <pre className={`p-4 rounded text-xs w-full overflow-auto max-h-40 font-mono bg-red-900/50`}>{e.toString()}</pre>
+                </div>
+            );
         }
     }, [app.code]);
 
@@ -213,7 +304,11 @@ export const DynamicAppRuntime = ({ app, user, onNotify }: { app: any, user: any
                 {checkPermission('notifications') && <Bell size={12} className="text-blue-500" />}
                 {checkPermission('geolocation') && <MapPin size={12} className="text-blue-500" />}
             </div>
-            {Component && <Component />}
+            {Component && (
+                <ErrorBoundary key={app.code}>
+                    <Component />
+                </ErrorBoundary>
+            )}
         </div>
     );
 };
