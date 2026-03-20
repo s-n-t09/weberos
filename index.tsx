@@ -49,7 +49,8 @@ import { HelperApp } from './apps/HelperApp';
 import { WePicApp } from './apps/WePicApp';
 import { WePlayerApp } from './apps/WePlayerApp';
 import { WireBoxApp } from './apps/WireBoxApp';
-import { SnakeApp, CalcoApp, WeatherApp, DynamicAppRuntime } from './apps/MiscApps';
+import { CalcoApp, WeatherApp, DynamicAppRuntime } from './apps/MiscApps';
+import { GamesApp } from './apps/GamesApp';
 import { PermTesterApp } from './apps/PermTesterApp';
 import { InstallerApp } from './apps/InstallerApp';
 
@@ -59,7 +60,7 @@ const SYSTEM_REGISTRY: Record<string, { name: string, icon: any, color: string }
   'terminal': { name: 'Terminal', icon: TerminalIcon, color: 'bg-gray-900' },
   'wirebox': { name: 'WireBox', icon: Globe, color: 'bg-blue-400' },
   'coder': { name: 'Coder', icon: Code, color: 'bg-blue-600' },
-  'snake': { name: 'Snake', icon: Gamepad2, color: 'bg-green-600' },
+  'games': { name: 'Games', icon: Gamepad2, color: 'bg-green-600' },
   'calco': { name: 'Calco', icon: Calculator, color: 'bg-orange-500' },
   'weather': { name: 'Weather', icon: CloudSun, color: 'bg-sky-500' },
   'settings': { name: 'Settings', icon: User, color: 'bg-slate-600' },
@@ -74,7 +75,7 @@ const SYSTEM_REGISTRY: Record<string, { name: string, icon: any, color: string }
 const WeberOS = () => {
   const [booting, setBooting] = useState(true);
   const [bootProgress, setBootProgress] = useState(0);
-  const [bootStatus, setBootStatus] = useState('Initializing WeberOS 1.8...');
+  const [bootStatus, setBootStatus] = useState('Initializing WeberOS 1.9...');
 
   const [user, setUserState] = useState<UserProfile | null>(null);
   const [usersList, setUsersList] = useState<UserProfile[]>([]);
@@ -843,7 +844,7 @@ const WeberOS = () => {
                     setOpenWithRequest({ file: path, apps: getAllAppsForOpenWith() });
                 }}
             />;
-            else if (win.appId === 'snake') AppContent = <SnakeApp user={user} />;
+            else if (win.appId === 'games') AppContent = <GamesApp />;
             else if (win.appId === 'calco') AppContent = <CalcoApp user={user} />;
             else if (win.appId === 'weather') AppContent = <WeatherApp user={user} setUser={setUser} />;
             else if (win.appId === 'settings') AppContent = <SettingsApp user={user} setUser={setUser} onDeleteUser={deleteUser} />;
