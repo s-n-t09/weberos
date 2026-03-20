@@ -12,7 +12,7 @@ export const DEFAULT_FS: FileSystemNode = {
         user: {
           type: 'dir',
           children: {
-            'readme.txt': { type: 'file', content: 'Welcome to WeberOS 1.8!\n\nThis is a fully functional web-based OS.\nTry the new WireBox Browser!' },
+            'readme.txt': { type: 'file', content: 'Welcome to WeberOS 1.9!\n\nThis is a fully functional web-based OS.\nTry the new WireBox Browser!' },
             'todo.txt': { type: 'file', content: '- Try WireBox\n- Check Notifications\n- Write a .wbr app with permissions' },
             'hello.wbr': { 
                 type: 'file', 
@@ -47,7 +47,7 @@ export const DEFAULT_FS: FileSystemNode = {
   }
 };
 
-export const DEFAULT_APPS = ['explorer', 'terminal', 'wirebox', 'coder', 'snake', 'calco', 'weather', 'settings', 'market', 'helper', 'wepic', 'weplayer', 'permtester'];
+export const DEFAULT_APPS = ['explorer', 'terminal', 'wirebox', 'coder', 'games', 'calco', 'weather', 'settings', 'market', 'helper', 'wepic', 'weplayer', 'permtester'];
 
 export const WALLPAPERS = [
   "https://images.unsplash.com/photo-1477346611705-65d1883cee1e?auto=format&fit=crop&q=80&w=2070",
