@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { User, Palette, HardDrive, Download, Upload, Cpu, AlertCircle, Trash2, CheckCircle2, Bell, AppWindow, Github } from 'lucide-react';
+import { User, Palette, HardDrive, Download, Upload, Cpu, AlertCircle, Trash2, CheckCircle2, Bell, AppWindow, Github, Package } from 'lucide-react';
 import { WALLPAPERS, FILE_ASSOCIATIONS, DEFAULT_APPS } from '../utils/constants';
 import { osAlert, osConfirm } from '../components/DialogHost';
 
 export const SettingsApp = ({ user, setUser, onDeleteUser }: any) => {
-    const [activeTab, setActiveTab] = useState<'profile' | 'appearance' | 'notifications' | 'defaults'>('profile');
+    const [activeTab, setActiveTab] = useState<'profile' | 'appearance' | 'notifications' | 'defaults' | 'apps'>('profile');
 
     const handleWallpaperChange = (url: string) => {
         setUser({ ...user, settings: { ...user.settings, wallpaper: url } });
@@ -74,6 +74,19 @@ export const SettingsApp = ({ user, setUser, onDeleteUser }: any) => {
         }
     };
 
+    const handleUninstallApp = async (appId: string) => {
+        if (await osConfirm(`Are you sure you want to uninstall ${appId}?`)) {
+            const newInstalled = user.installedPackages.filter((id: string) => id !== appId);
+            const newCustomApps = { ...user.customApps };
+            delete newCustomApps[appId];
+            setUser({
+                ...user,
+                installedPackages: newInstalled,
+                customApps: newCustomApps
+            });
+        }
+    };
+
     const notifSettings = user.settings.notifications || { enabled: true, sound: true, external: false };
 
     return (
@@ -92,6 +105,9 @@ export const SettingsApp = ({ user, setUser, onDeleteUser }: any) => {
                  </button>
                  <button onClick={() => setActiveTab('defaults')} className={`text-left px-4 py-2 rounded-lg transition flex items-center gap-2 ${activeTab === 'defaults' ? 'bg-blue-50 text-blue-600 font-medium' : 'hover:bg-slate-50 text-slate-600'}`}>
                     <AppWindow size={18} /> Default Apps
+                 </button>
+                 <button onClick={() => setActiveTab('apps')} className={`text-left px-4 py-2 rounded-lg transition flex items-center gap-2 ${activeTab === 'apps' ? 'bg-blue-50 text-blue-600 font-medium' : 'hover:bg-slate-50 text-slate-600'}`}>
+                    <Package size={18} /> Installed Apps
                  </button>
              </div>
 
@@ -127,7 +143,7 @@ export const SettingsApp = ({ user, setUser, onDeleteUser }: any) => {
                             <h3 className={`font-bold mb-4 flex items-center gap-2 transition-colors text-slate-900`}><Cpu size={18}/> System Info</h3>
                             <div className="space-y-2 text-sm">
                                 <div className={`flex justify-between border-b pb-1 transition-colors border-slate-100`}>
-                                    <span className="text-slate-500">OS Version</span><span className="text-slate-900">WeberOS 1.8.0</span>
+                                    <span className="text-slate-500">OS Version</span><span className="text-slate-900">WeberOS 1.9.0</span>
                                 </div>
                                 <div className={`flex justify-between border-b pb-1 transition-colors border-slate-100`}>
                                     <span className="text-slate-500">Storage Used</span><span className="text-slate-900">{JSON.stringify(user.fs).length} bytes</span>
@@ -203,6 +219,40 @@ export const SettingsApp = ({ user, setUser, onDeleteUser }: any) => {
                                 );
                             })}
                         </div>
+                     </div>
+                 )}
+
+                 {activeTab === 'apps' && (
+                     <div className="max-w-xl">
+                         <h3 className={`text-2xl font-bold mb-6 transition-colors text-slate-900`}>Installed Apps</h3>
+                         {user.installedPackages.length === 0 ? (
+                             <div className="text-slate-500 text-center py-8">No custom apps installed.</div>
+                         ) : (
+                             <div className={`rounded-xl border divide-y transition-colors bg-white border-slate-200 divide-slate-100`}>
+                                 {user.installedPackages.map((appId: string) => {
+                                     const app = user.customApps[appId];
+                                     return (
+                                         <div key={appId} className="p-4 flex items-center justify-between">
+                                             <div className="flex items-center gap-3">
+                                                 <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center text-slate-600">
+                                                     <Package size={20} />
+                                                 </div>
+                                                 <div>
+                                                     <div className="font-bold text-slate-900">{app?.name || appId}</div>
+                                                     <div className="text-xs text-slate-500">v{app?.version || '1.0.0'} • {appId}</div>
+                                                 </div>
+                                             </div>
+                                             <button 
+                                                 onClick={() => handleUninstallApp(appId)}
+                                                 className="px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors flex items-center gap-1"
+                                             >
+                                                 <Trash2 size={14} /> Uninstall
+                                             </button>
+                                         </div>
+                                     );
+                                 })}
+                             </div>
+                         )}
                      </div>
                  )}
 
