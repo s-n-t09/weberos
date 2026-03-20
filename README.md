@@ -3,7 +3,7 @@
   <a href="https://github.com/s-n-t09/weberos">
     <img src="/logo.png" alt="WeberOS Logo" width="125" height="125">
   </a>
-  <h1 align="center">WeberOS v1.8</h1>
+  <h1 align="center">WeberOS v1.9</h1>
 
   <p align="center">
     <strong>Next-Gen Web-Based Operating System Simulator</strong>
