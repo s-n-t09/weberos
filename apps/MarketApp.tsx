@@ -24,6 +24,7 @@ export const MarketApp = ({ user, setUser, onNotify }: { user: UserProfile, setU
             
             try {
                 const categoryModules = import.meta.glob('/market/*.json', { eager: true });
+                const wbrModules = import.meta.glob('/market/apps/*.wbr', { query: '?raw', import: 'default' });
                 
                 for (const [path, module] of Object.entries(categoryModules)) {
                     const catName = path.split('/').pop()?.replace('.json', '');
@@ -31,10 +32,32 @@ export const MarketApp = ({ user, setUser, onNotify }: { user: UserProfile, setU
                     
                     const apps = (module as any).default || module;
                     if (Array.isArray(apps)) {
-                        const appsWithMeta = apps.map(app => ({
-                            ...app,
-                            category: cat,
-                            color: colors[cat] || 'bg-slate-500'
+                        const appsWithMeta = await Promise.all(apps.map(async app => {
+                            let version = app.version;
+                            if (!version && app.location) {
+                                try {
+                                    const wbrPath = app.location.startsWith('/') ? app.location : `/${app.location}`;
+                                    if (wbrModules[wbrPath]) {
+                                        const rawData = await wbrModules[wbrPath]();
+                                        const wbrData = JSON.parse(rawData as string);
+                                        if (wbrData.version) version = wbrData.version;
+                                    } else {
+                                        const res = await fetch(wbrPath);
+                                        if (res.ok) {
+                                            const wbrData = await res.json();
+                                            if (wbrData.version) version = wbrData.version;
+                                        }
+                                    }
+                                } catch (e) {
+                                    console.error(`Failed to fetch version for ${app.id}`, e);
+                                }
+                            }
+                            return {
+                                ...app,
+                                version,
+                                category: cat,
+                                color: colors[cat] || 'bg-slate-500'
+                            };
                         }));
                         allApps = [...allApps, ...appsWithMeta];
                     }
@@ -101,11 +124,20 @@ export const MarketApp = ({ user, setUser, onNotify }: { user: UserProfile, setU
             }
         }
 
-        const newCustomApps = { ...user.customApps, [app.id]: { id: app.id, name: app.name, iconName: app.icon, version: version, code: code, permissions: permissions }};
+        const newCustomApps = { ...user.customApps, [app.id]: { id: app.id, name: app.name, iconName: app.icon, version: version, code: code, permissions: permissions, location: app.location }};
         const newPkgs = isInstalled ? user.installedPackages : [...user.installedPackages, app.id];
         setUser({...user, installedPackages: newPkgs, customApps: newCustomApps});
         if (onNotify) onNotify('market', isUpgrade ? 'App Upgraded' : 'App Installed', `${app.name} ${isUpgrade ? 'upgraded' : 'installed'} successfully!`);
         await osAlert(`${app.name} ${isUpgrade ? 'upgraded' : 'installed'} successfully!`);
+    };
+
+    const handleUninstall = async (app: any) => {
+        const newCustomApps = { ...user.customApps };
+        delete newCustomApps[app.id];
+        const newPkgs = user.installedPackages.filter(id => id !== app.id);
+        setUser({...user, installedPackages: newPkgs, customApps: newCustomApps});
+        if (onNotify) onNotify('market', 'App Uninstalled', `${app.name} uninstalled successfully!`);
+        await osAlert(`${app.name} uninstalled successfully!`);
     };
 
     return (
@@ -177,13 +209,40 @@ export const MarketApp = ({ user, setUser, onNotify }: { user: UserProfile, setU
                                     <h3 className="font-bold text-lg text-slate-900 mb-0.5">{app.name} {app.version ? <span className="text-xs text-slate-400 font-normal ml-1">v{app.version}</span> : null}</h3>
                                     <div className="text-[10px] text-blue-600 font-medium mb-2">by {app.author || 'Unknown'}</div>
                                     <p className="text-sm text-slate-500 mb-6 flex-1 line-clamp-3">{app.description}</p>
-                                    <button 
-                                        onClick={() => handleInstall(app)}
-                                        disabled={isInstalled && !isUpgrade}
-                                        className={`w-full py-2.5 rounded-xl font-bold text-sm transition-all ${isInstalled && !isUpgrade ? 'bg-slate-100 text-slate-400 cursor-default' : 'bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-200'}`}
-                                    >
-                                        {isInstalled ? (isUpgrade ? 'Update' : 'Installed') : 'Install'}
-                                    </button>
+                                    <div className="flex gap-2 w-full">
+                                        {isInstalled ? (
+                                            <>
+                                                {isUpgrade ? (
+                                                    <button 
+                                                        onClick={() => handleInstall(app)}
+                                                        className="flex-1 py-2.5 rounded-xl font-bold text-sm transition-all bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-200"
+                                                    >
+                                                        Upgrade
+                                                    </button>
+                                                ) : (
+                                                    <button 
+                                                        disabled
+                                                        className="flex-1 py-2.5 rounded-xl font-bold text-sm transition-all bg-slate-100 text-slate-400 cursor-default"
+                                                    >
+                                                        Installed
+                                                    </button>
+                                                )}
+                                                <button 
+                                                    onClick={() => handleUninstall(app)}
+                                                    className="flex-1 py-2.5 rounded-xl font-bold text-sm transition-all bg-red-100 text-red-600 hover:bg-red-200"
+                                                >
+                                                    Uninstall
+                                                </button>
+                                            </>
+                                        ) : (
+                                            <button 
+                                                onClick={() => handleInstall(app)}
+                                                className="w-full py-2.5 rounded-xl font-bold text-sm transition-all bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-200"
+                                            >
+                                                Install
+                                            </button>
+                                        )}
+                                    </div>
                                 </div>
                             );
                         })}

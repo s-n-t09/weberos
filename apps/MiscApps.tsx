@@ -186,7 +186,8 @@ export const DynamicAppRuntime = ({ app, user, onNotify, fs, setFs, openFilePick
 
     const Component = useMemo(() => {
         try {
-            const func = new Function('React', 'LucideIcons', 'Sys', app.code);
+            const codeString = Array.isArray(app.code) ? app.code.join('\n') : app.code;
+            const func = new Function('React', 'LucideIcons', 'Sys', codeString);
             const res = func(React, LucideIcons, Sys);
             if (typeof res === 'function') {
                 return res;
@@ -213,6 +214,11 @@ export const DynamicAppRuntime = ({ app, user, onNotify, fs, setFs, openFilePick
         );
     }
 
+    const legacyOnNotify = (appId: string, title: string, msg: string) => {
+        if (checkPermission('notifications')) onNotify(app.id, title, msg);
+        else console.warn(`App ${app.name} lacks 'notifications' permission.`);
+    };
+
     return (
         <div className="h-full relative overflow-hidden">
             {/* Permission Indicator Bar */}
@@ -224,7 +230,7 @@ export const DynamicAppRuntime = ({ app, user, onNotify, fs, setFs, openFilePick
             </div>
             {Component && (
                 <ErrorBoundary key={app.code}>
-                    <Component />
+                    <Component onNotify={legacyOnNotify} />
                 </ErrorBoundary>
             )}
         </div>

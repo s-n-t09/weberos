@@ -4,6 +4,7 @@ import { FileSystemNode, UserProfile } from '../types';
 import { getDirContents, deepClone } from '../utils/fs';
 import { USER_HOME_PATH } from '../utils/constants';
 import { osAlert, osConfirm, osPrompt } from '../components/DialogHost';
+import { playTrash } from '../utils/sounds';
 
 interface ExplorerAppProps {
     fs: FileSystemNode;
@@ -132,6 +133,7 @@ export const ExplorerApp = ({ fs, setFs, user, mode = 'normal', onPick, onOpen, 
             }
             if (parent.children) {
                 delete parent.children[selected];
+                playTrash();
                 setFs({ ...fs });
                 setSelected(null);
             }

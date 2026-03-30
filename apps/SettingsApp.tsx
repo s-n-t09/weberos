@@ -143,7 +143,7 @@ export const SettingsApp = ({ user, setUser, onDeleteUser }: any) => {
                             <h3 className={`font-bold mb-4 flex items-center gap-2 transition-colors text-slate-900`}><Cpu size={18}/> System Info</h3>
                             <div className="space-y-2 text-sm">
                                 <div className={`flex justify-between border-b pb-1 transition-colors border-slate-100`}>
-                                    <span className="text-slate-500">OS Version</span><span className="text-slate-900">WeberOS 1.9.0</span>
+                                    <span className="text-slate-500">OS Version</span><span className="text-slate-900">WeberOS 2.0.0</span>
                                 </div>
                                 <div className={`flex justify-between border-b pb-1 transition-colors border-slate-100`}>
                                     <span className="text-slate-500">Storage Used</span><span className="text-slate-900">{JSON.stringify(user.fs).length} bytes</span>
@@ -178,18 +178,6 @@ export const SettingsApp = ({ user, setUser, onDeleteUser }: any) => {
                                      type="checkbox" 
                                      checked={notifSettings.enabled}
                                      onChange={() => toggleNotificationSetting('enabled')}
-                                     className="w-5 h-5 accent-blue-600"
-                                 />
-                             </div>
-                             <div className="p-4 flex items-center justify-between">
-                                 <div>
-                                     <div className={`font-bold transition-colors text-slate-900`}>Browser Notifications</div>
-                                     <div className={`text-sm transition-colors text-slate-500`}>Allow WeberOS to send real browser notifications</div>
-                                 </div>
-                                 <input 
-                                     type="checkbox" 
-                                     checked={notifSettings.external}
-                                     onChange={() => toggleNotificationSetting('external')}
                                      className="w-5 h-5 accent-blue-600"
                                  />
                              </div>

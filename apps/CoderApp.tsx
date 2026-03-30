@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, Save, FileCode, ChevronDown, ChevronRight, FilePlus } from 'lucide-react';
+import { Plus, Save, FileCode, ChevronDown, ChevronRight, FilePlus, Bot, Send, Settings, X, FileText } from 'lucide-react';
 import { resolvePath } from '../utils/fs';
 import { USER_HOME_PATH } from '../utils/constants';
 import { osAlert, osPrompt } from '../components/DialogHost';
@@ -55,6 +55,42 @@ export const CoderApp = ({ fs, setFs, launchData }: any) => {
     const [content, setContent] = useState('');
     const [status, setStatus] = useState('Welcome to Coder');
     const [suggestion, setSuggestion] = useState<string | null>(null);
+    
+    // WeGroq State
+    const [isGroqOpen, setIsGroqOpen] = useState(false);
+    const [groqKey, setGroqKey] = useState(() => localStorage.getItem('wegroq_key') || '');
+    const [groqModel, setGroqModel] = useState(() => localStorage.getItem('wegroq_model') || 'Ilama-3.3-70b-versatile');
+    const [groqMessages, setGroqMessages] = useState<{role: string, content: string}[]>([]);
+    const [groqInput, setGroqInput] = useState('');
+    const [isGroqLoading, setIsGroqLoading] = useState(false);
+    const [showGroqSettings, setShowGroqSettings] = useState(false);
+    const chatEndRef = useRef<HTMLDivElement>(null);
+
+    const GROQ_MODELS = [
+        "open/gpt-oss-120b",
+        "openai/gpt-oss-20b",
+        "openai/gpt-oss-safeguard-20b",
+        "whisper-large-v3-turbo",
+        "qwen/qwen3-32b",
+        "canopylabs/orpheus-arabic-saudi",
+        "canopylabs/orpheus-v1-english",
+        "groq/compound",
+        "Ilama-3.1-8b-instant",
+        "Ilama-3.3-70b-versatile",
+        "meta-llama/llama-prompt-guard-2-86m"
+    ];
+
+    useEffect(() => {
+        if (chatEndRef.current) {
+            chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
+        }
+    }, [groqMessages]);
+
+    const saveGroqSettings = () => {
+        localStorage.setItem('wegroq_key', groqKey);
+        localStorage.setItem('wegroq_model', groqModel);
+        setShowGroqSettings(false);
+    };
 
     // Only show user directory in sidebar
     let userDir = fs;
@@ -104,25 +140,34 @@ export const CoderApp = ({ fs, setFs, launchData }: any) => {
             if (parent.children[name]) {
                 await osAlert("File already exists!");
             } else {
-                // Default content based on extension
-                let initialContent = '';
-                if (name.endsWith('.wbr')) {
-                    initialContent = JSON.stringify({
-                        id: name.replace('.wbr', ''),
-                        name: name.replace('.wbr', ''),
-                        icon: "Box",
-                        permissions: [],
-                        code: "return () => React.createElement('div', null, 'Hello')"
-                    }, null, 2);
-                }
-
-                parent.children[name] = { type: 'file', content: initialContent };
+                parent.children[name] = { type: 'file', content: '' };
                 setFs({ ...fs });
                 setCurrentFile(name);
-                setContent(initialContent);
+                setContent('');
                 setStatus(`Created: ${name}`);
             }
         }
+    };
+
+    const handleInsertTemplate = () => {
+        if (!currentFile || !currentFile.endsWith('.wbr')) {
+            osAlert("Please open or create a .wbr file first.");
+            return;
+        }
+        const name = currentFile.split('/').pop() || 'app';
+        const initialContent = JSON.stringify({
+            id: name.replace('.wbr', ''),
+            name: name.replace('.wbr', ''),
+            icon: "Box",
+            permissions: [],
+            code: [
+                "return function App({ onNotify, fs }) {",
+                "  return React.createElement('div', { className: 'p-4 text-white' }, 'Hello World');",
+                "}"
+            ]
+        }, null, 2);
+        setContent(initialContent);
+        setStatus("Inserted .wbr template");
     };
 
     const handleSave = () => {
@@ -168,6 +213,113 @@ export const CoderApp = ({ fs, setFs, launchData }: any) => {
         }
     };
 
+    const handleGroqSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!groqInput.trim() || !groqKey) {
+            if (!groqKey) setShowGroqSettings(true);
+            return;
+        }
+
+        const userMsg = groqInput;
+        setGroqInput('');
+        setGroqMessages(prev => [...prev, { role: 'user', content: userMsg }]);
+        setIsGroqLoading(true);
+
+        try {
+            const systemPrompt = `You are WeGroq, an AI coding assistant integrated directly into the 'Coder' app of WeberOS.
+WeberOS is a web-based operating system simulator running in the browser.
+The Coder app allows users to write code, specifically Weber Runtime (.wbr) apps.
+A .wbr app is a JSON file containing metadata and a React component.
+The "code" field can be a single string or an array of strings (which is preferred for multi-line code).
+Example .wbr structure:
+{
+  "id": "my-app",
+  "name": "My App",
+  "icon": "Box",
+  "permissions": ["notifications", "fs", "camera", "microphone", "geolocation"],
+  "code": [
+    "return function MyApp({ onNotify, fs }) {",
+    "  return React.createElement('div', null, 'Hello World');",
+    "}"
+  ]
+}
+Available permissions:
+- "notifications": Allows sending OS notifications via \`onNotify(appId, title, message)\` or \`Sys.notify(title, message)\`.
+- "fs": Allows reading/writing files via \`Sys.fs.readFile(path)\`, \`Sys.fs.writeFile(path, content)\`, \`Sys.fs.openFilePicker()\`, \`Sys.fs.openFileSaver()\`.
+- "camera": Allows requesting camera via \`Sys.requestCamera()\`.
+- "microphone": Allows requesting microphone via \`Sys.requestMic()\`.
+- "geolocation": Allows getting location via \`Sys.getLocation()\`.
+
+You can help the user write code, debug, or explain concepts.
+You have the ability to create or modify files in the user's filesystem by outputting a special JSON block.
+To write a file, output exactly this format anywhere in your response:
+\`\`\`file-write
+{
+  "filename": "example.wbr",
+  "content": "your content here"
+}
+\`\`\`
+The user's current file is: ${currentFile || 'None'}
+The current file content is:
+${content}
+`;
+
+            const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${groqKey}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    model: groqModel,
+                    messages: [
+                        { role: 'system', content: systemPrompt },
+                        ...groqMessages.map(m => ({ role: m.role, content: m.content })),
+                        { role: 'user', content: userMsg }
+                    ]
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`Groq API Error: ${response.statusText}`);
+            }
+
+            const data = await response.json();
+            const aiResponse = data.choices[0].message.content;
+            
+            setGroqMessages(prev => [...prev, { role: 'assistant', content: aiResponse }]);
+
+            // Parse for file writes
+            const fileWriteRegex = /\`\`\`file-write\n([\s\S]*?)\n\`\`\`/g;
+            let match;
+            while ((match = fileWriteRegex.exec(aiResponse)) !== null) {
+                try {
+                    const fileData = JSON.parse(match[1]);
+                    if (fileData.filename && fileData.content !== undefined) {
+                        let parent = fs;
+                        for(const p of USER_HOME_PATH) {
+                            if(parent.children) parent = parent.children[p];
+                        }
+                        if (parent.children) {
+                            parent.children[fileData.filename] = { type: 'file', content: fileData.content };
+                            setFs({ ...fs });
+                            setCurrentFile(fileData.filename);
+                            setContent(fileData.content);
+                            setStatus(`WeGroq created/updated: ${fileData.filename}`);
+                        }
+                    }
+                } catch (err) {
+                    console.error("Failed to parse file-write block", err);
+                }
+            }
+
+        } catch (error: any) {
+            setGroqMessages(prev => [...prev, { role: 'assistant', content: `Error: ${error.message}` }]);
+        } finally {
+            setIsGroqLoading(false);
+        }
+    };
+
     const lines = content.split('\n');
 
     return (
@@ -198,6 +350,12 @@ export const CoderApp = ({ fs, setFs, launchData }: any) => {
                     <span className="font-bold text-blue-400">{currentFile ? currentFile.split('/').pop() : 'Untitled'}</span>
                     <div className="flex-1"></div>
                     <span className="text-gray-500 mr-2">{status}</span>
+                    <button onClick={handleInsertTemplate} className="hover:bg-[#3e3e42] bg-[#2d2d2d] border border-[#3e3e42] text-gray-300 px-3 py-1 rounded flex items-center gap-1 transition">
+                        <FileText size={12} /> Use .wbr Template
+                    </button>
+                    <button onClick={() => setIsGroqOpen(!isGroqOpen)} className={`hover:bg-[#3e3e42] ${isGroqOpen ? 'bg-[#0e639c]' : 'bg-[#2d2d2d] border border-[#3e3e42]'} text-white px-3 py-1 rounded flex items-center gap-1 transition`}>
+                        <Bot size={12} /> WeGroq
+                    </button>
                     <button onClick={handleSave} className="hover:bg-[#3e3e42] bg-[#0e639c] text-white px-3 py-1 rounded flex items-center gap-1 transition">
                         <Save size={12} /> Save
                     </button>
@@ -228,6 +386,101 @@ export const CoderApp = ({ fs, setFs, launchData }: any) => {
                     </div>
                 </div>
             </div>
+
+            {/* WeGroq Sidebar */}
+            {isGroqOpen && (
+                <div className="w-80 bg-[#252526] border-l border-[#3e3e42] flex flex-col">
+                    <div className="p-3 border-b border-[#3e3e42] flex justify-between items-center bg-[#2d2d2d]">
+                        <div className="flex items-center gap-2 font-bold text-blue-400">
+                            <Bot size={16} />
+                            WeGroq
+                        </div>
+                        <div className="flex gap-2">
+                            <button onClick={() => setShowGroqSettings(!showGroqSettings)} className="text-gray-400 hover:text-white transition">
+                                <Settings size={14} />
+                            </button>
+                            <button onClick={() => setIsGroqOpen(false)} className="text-gray-400 hover:text-white transition">
+                                <X size={14} />
+                            </button>
+                        </div>
+                    </div>
+
+                    {showGroqSettings ? (
+                        <div className="p-4 flex-1 overflow-y-auto">
+                            <h3 className="font-bold mb-4 text-white">WeGroq Settings</h3>
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-xs text-gray-400 mb-1">Groq API Key</label>
+                                    <input 
+                                        type="password" 
+                                        value={groqKey}
+                                        onChange={e => setGroqKey(e.target.value)}
+                                        className="w-full bg-[#1e1e1e] border border-[#3e3e42] rounded p-2 text-sm text-white outline-none focus:border-blue-500"
+                                        placeholder="gsk_..."
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs text-gray-400 mb-1">Model</label>
+                                    <select 
+                                        value={groqModel}
+                                        onChange={e => setGroqModel(e.target.value)}
+                                        className="w-full bg-[#1e1e1e] border border-[#3e3e42] rounded p-2 text-sm text-white outline-none focus:border-blue-500"
+                                    >
+                                        {GROQ_MODELS.map(m => <option key={m} value={m}>{m}</option>)}
+                                    </select>
+                                </div>
+                                <button onClick={saveGroqSettings} className="w-full bg-blue-600 hover:bg-blue-500 text-white py-2 rounded font-bold transition">
+                                    Save Settings
+                                </button>
+                            </div>
+                        </div>
+                    ) : (
+                        <>
+                            <div className="flex-1 overflow-y-auto p-3 space-y-4">
+                                {groqMessages.length === 0 ? (
+                                    <div className="text-center text-gray-500 mt-10 text-xs">
+                                        <Bot size={32} className="mx-auto mb-2 opacity-50" />
+                                        <p>I am WeGroq.</p>
+                                        <p>I can help you write WeberOS apps.</p>
+                                        {!groqKey && <p className="text-yellow-500 mt-2">Please set your API key in settings.</p>}
+                                    </div>
+                                ) : (
+                                    groqMessages.map((msg, i) => (
+                                        <div key={i} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
+                                            <div className={`max-w-[90%] p-2 rounded text-xs ${msg.role === 'user' ? 'bg-[#0e639c] text-white' : 'bg-[#3e3e42] text-gray-200'}`}>
+                                                <div className="whitespace-pre-wrap break-words">{msg.content}</div>
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                                {isGroqLoading && (
+                                    <div className="flex items-start">
+                                        <div className="bg-[#3e3e42] text-gray-200 p-2 rounded text-xs animate-pulse">
+                                            Thinking...
+                                        </div>
+                                    </div>
+                                )}
+                                <div ref={chatEndRef} />
+                            </div>
+                            <div className="p-3 border-t border-[#3e3e42] bg-[#2d2d2d]">
+                                <form onSubmit={handleGroqSubmit} className="flex gap-2">
+                                    <input 
+                                        type="text" 
+                                        value={groqInput}
+                                        onChange={e => setGroqInput(e.target.value)}
+                                        placeholder="Ask WeGroq..."
+                                        className="flex-1 bg-[#1e1e1e] border border-[#3e3e42] rounded px-2 py-1.5 text-sm text-white outline-none focus:border-blue-500"
+                                        disabled={isGroqLoading}
+                                    />
+                                    <button type="submit" disabled={isGroqLoading || !groqInput.trim()} className="bg-[#0e639c] hover:bg-blue-500 disabled:opacity-50 text-white p-1.5 rounded transition">
+                                        <Send size={16} />
+                                    </button>
+                                </form>
+                            </div>
+                        </>
+                    )}
+                </div>
+            )}
         </div>
     );
 };

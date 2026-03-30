@@ -12,6 +12,7 @@ const SnakeGame = () => {
     const snakeRef = useRef([{x: 10, y: 10}, {x: 9, y: 10}]);
     const foodRef = useRef({x: 15, y: 15});
     const intervalRef = useRef<any>(null);
+    const [showArrows, setShowArrows] = useState(false);
 
     const handleDir = (x: number, y: number) => {
         if (!startedRef.current) startedRef.current = true;
@@ -90,6 +91,9 @@ const SnakeGame = () => {
             <div className="mb-4 flex justify-between w-full max-w-[400px] items-center">
                 <span className="text-xl font-bold">Snake</span>
                 <div className="flex items-center gap-4">
+                    <button onClick={() => setShowArrows(!showArrows)} className="text-xs px-2 py-1 bg-slate-800 rounded hover:bg-slate-700">
+                        {showArrows ? 'Hide Arrows' : 'Show Arrows'}
+                    </button>
                     <span>Score: {score}</span>
                     <button onClick={resetGame} className="p-2 bg-slate-800 rounded hover:bg-slate-700"><RefreshCw size={16} /></button>
                 </div>
@@ -109,8 +113,8 @@ const SnakeGame = () => {
                 )}
             </div>
             
-            {/* Mobile Controls */}
-            <div className="mt-6 grid grid-cols-3 gap-2 md:hidden">
+            {/* Mobile / On-Screen Controls */}
+            <div className={`mt-6 grid grid-cols-3 gap-2 ${showArrows ? 'flex' : 'hidden md:hidden'}`}>
                 <div />
                 <button onClick={() => handleDir(0, -1)} className="p-4 bg-slate-800 rounded-lg flex items-center justify-center active:bg-slate-700"><ArrowUp /></button>
                 <div />
@@ -463,9 +467,264 @@ const Game2048 = () => {
     );
 };
 
+// --- Geometry Match Game ---
+const SHAPES = [
+    LucideIcons.Circle, LucideIcons.Square, LucideIcons.Triangle, LucideIcons.Star,
+    LucideIcons.Hexagon, LucideIcons.Diamond, LucideIcons.Heart, LucideIcons.Cloud
+];
+
+const GeometryMatchGame = () => {
+    const [cards, setCards] = useState<{id: number, shape: any, isFlipped: boolean, isMatched: boolean}[]>([]);
+    const [flipped, setFlipped] = useState<number[]>([]);
+    const [moves, setMoves] = useState(0);
+    const [matches, setMatches] = useState(0);
+
+    const initGame = useCallback(() => {
+        const deck = [...SHAPES, ...SHAPES]
+            .sort(() => Math.random() - 0.5)
+            .map((shape, i) => ({ id: i, shape, isFlipped: false, isMatched: false }));
+        setCards(deck);
+        setFlipped([]);
+        setMoves(0);
+        setMatches(0);
+    }, []);
+
+    useEffect(() => { initGame(); }, [initGame]);
+
+    const handleCardClick = (index: number) => {
+        if (flipped.length === 2 || cards[index].isFlipped || cards[index].isMatched) return;
+
+        const newCards = [...cards];
+        newCards[index].isFlipped = true;
+        setCards(newCards);
+
+        const newFlipped = [...flipped, index];
+        setFlipped(newFlipped);
+
+        if (newFlipped.length === 2) {
+            setMoves(m => m + 1);
+            const [first, second] = newFlipped;
+            if (cards[first].shape === cards[second].shape) {
+                setTimeout(() => {
+                    const matchedCards = [...cards];
+                    matchedCards[first].isMatched = true;
+                    matchedCards[second].isMatched = true;
+                    setCards(matchedCards);
+                    setFlipped([]);
+                    setMatches(m => m + 1);
+                }, 500);
+            } else {
+                setTimeout(() => {
+                    const resetCards = [...cards];
+                    resetCards[first].isFlipped = false;
+                    resetCards[second].isFlipped = false;
+                    setCards(resetCards);
+                    setFlipped([]);
+                }, 1000);
+            }
+        }
+    };
+
+    return (
+        <div className="flex flex-col items-center h-full p-4 bg-indigo-50 text-slate-800 overflow-y-auto">
+            <div className="mb-6 flex justify-between w-full max-w-md items-center">
+                <h1 className="text-3xl font-bold text-indigo-900">Geometry Match</h1>
+                <div className="flex items-center gap-4">
+                    <div className="text-sm font-bold text-indigo-700">Moves: {moves}</div>
+                    <button onClick={initGame} className="p-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"><RefreshCw size={16} /></button>
+                </div>
+            </div>
+            
+            {matches === 8 && (
+                <div className="mb-6 p-4 bg-green-100 text-green-800 rounded-xl font-bold text-xl text-center w-full max-w-md">
+                    You won in {moves} moves!
+                </div>
+            )}
+
+            <div className="grid grid-cols-4 gap-3 md:gap-4 w-full max-w-md">
+                {cards.map((card, i) => {
+                    const Icon = card.shape;
+                    return (
+                        <button
+                            key={card.id}
+                            onClick={() => handleCardClick(i)}
+                            className={`aspect-square rounded-xl flex items-center justify-center transition-all duration-300 transform ${card.isFlipped || card.isMatched ? 'bg-white shadow-md rotate-y-180' : 'bg-indigo-300 hover:bg-indigo-400 shadow-sm'}`}
+                        >
+                            {(card.isFlipped || card.isMatched) && <Icon size={40} className={`text-indigo-600 ${card.isMatched ? 'opacity-50' : ''}`} />}
+                        </button>
+                    );
+                })}
+            </div>
+        </div>
+    );
+};
+
+// --- Guess the Word Game ---
+const ALL_QUESTIONS = [
+    { q: "Planet we live on", a: "EARTH" },
+    { q: "Color of the sky", a: "BLUE" },
+    { q: "Opposite of hot", a: "COLD" },
+    { q: "Number of days in a week", a: "SEVEN" },
+    { q: "Capital of France", a: "PARIS" },
+    { q: "First letter of the alphabet", a: "A" },
+    { q: "Animal that says meow", a: "CAT" },
+    { q: "Water freezes at this temperature (Celsius)", a: "ZERO" },
+    { q: "The star at the center of our solar system", a: "SUN" },
+    { q: "A shape with three sides", a: "TRIANGLE" },
+    { q: "Capital of Japan", a: "TOKYO" },
+    { q: "Largest mammal on Earth", a: "WHALE" },
+    { q: "The color of an emerald", a: "GREEN" },
+    { q: "Opposite of up", a: "DOWN" },
+    { q: "A fruit that keeps the doctor away", a: "APPLE" },
+    { q: "The language spoken in Spain", a: "SPANISH" },
+    { q: "The continent where Egypt is located", a: "AFRICA" },
+    { q: "The chemical symbol for water", a: "H2O" },
+    { q: "The planet known as the Red Planet", a: "MARS" },
+    { q: "The tallest animal in the world", a: "GIRAFFE" },
+    { q: "The primary ingredient in bread", a: "FLOUR" },
+    { q: "The season that comes after Summer", a: "AUTUMN" },
+    { q: "The currency used in the United States", a: "DOLLAR" },
+    { q: "The instrument with black and white keys", a: "PIANO" },
+    { q: "The opposite of day", a: "NIGHT" },
+    { q: "The animal known as the king of the jungle", a: "LION" },
+    { q: "The shape of a stop sign", a: "OCTAGON" },
+    { q: "The largest ocean on Earth", a: "PACIFIC" },
+    { q: "The hardest natural substance on Earth", a: "DIAMOND" },
+    { q: "The organ that pumps blood", a: "HEART" },
+    { q: "The fastest land animal", a: "CHEETAH" },
+    { q: "The color of a school bus", a: "YELLOW" },
+    { q: "The force that keeps us on the ground", a: "GRAVITY" },
+    { q: "The closest planet to the Sun", a: "MERCURY" },
+    { q: "The capital of Italy", a: "ROME" },
+    { q: "The capital of England", a: "LONDON" },
+    { q: "A yellow fruit that monkeys love", a: "BANANA" },
+    { q: "The opposite of left", a: "RIGHT" },
+    { q: "The number of months in a year", a: "TWELVE" },
+    { q: "A bird that can swim but cannot fly", a: "PENGUIN" },
+    { q: "The color of a strawberry", a: "RED" },
+    { q: "The opposite of empty", a: "FULL" },
+    { q: "The tool used to cut paper", a: "SCISSORS" },
+    { q: "The largest planet in our solar system", a: "JUPITER" },
+    { q: "The season when snow falls", a: "WINTER" },
+    { q: "The animal that produces milk", a: "COW" },
+    { q: "The opposite of fast", a: "SLOW" },
+    { q: "The object used to tell time", a: "CLOCK" },
+    { q: "The opposite of young", a: "OLD" },
+    { q: "The animal that barks", a: "DOG" },
+    { q: "The shape of a full moon", a: "CIRCLE" },
+    { q: "The opposite of heavy", a: "LIGHT" },
+    { q: "The vehicle that travels on tracks", a: "TRAIN" },
+    { q: "The opposite of sweet", a: "SOUR" },
+    { q: "The color of a lemon", a: "YELLOW" },
+    { q: "The animal that has a long trunk", a: "ELEPHANT" },
+    { q: "The opposite of hard", a: "SOFT" },
+    { q: "The object used to write on a blackboard", a: "CHALK" },
+    { q: "The season when flowers bloom", a: "SPRING" },
+    { q: "The animal that has a shell and moves slowly", a: "TURTLE" }
+];
+
+const GuessTheWordGame = () => {
+    const [gameQuestions, setGameQuestions] = useState<{q: string, a: string}[]>([]);
+    const [currentQ, setCurrentQ] = useState(0);
+    const [guess, setGuess] = useState('');
+    const [score, setScore] = useState(0);
+    const [message, setMessage] = useState('');
+    const [gameOver, setGameOver] = useState(false);
+
+    const initGame = useCallback(() => {
+        const shuffled = [...ALL_QUESTIONS].sort(() => Math.random() - 0.5).slice(0, 10);
+        setGameQuestions(shuffled);
+        setCurrentQ(0);
+        setGuess('');
+        setScore(0);
+        setMessage('');
+        setGameOver(false);
+    }, []);
+
+    useEffect(() => { initGame(); }, [initGame]);
+
+    const handleGuess = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (gameOver || gameQuestions.length === 0 || message) return;
+
+        const isCorrect = guess.toUpperCase().trim() === gameQuestions[currentQ].a;
+        
+        if (isCorrect) {
+            setScore(s => s + 1);
+            setMessage('Correct! 🎉');
+        } else {
+            setMessage('Incorrect! ❌');
+        }
+
+        setTimeout(() => {
+            if (currentQ < gameQuestions.length - 1) {
+                setCurrentQ(q => q + 1);
+                setGuess('');
+                setMessage('');
+            } else {
+                setGameOver(true);
+                setMessage(`Game Over! Final Score: ${isCorrect ? score + 1 : score}/${gameQuestions.length}`);
+            }
+        }, 1000);
+    };
+
+    if (gameQuestions.length === 0) return null;
+
+    return (
+        <div className="flex flex-col items-center h-full p-4 bg-emerald-50 text-slate-800 overflow-y-auto">
+            <div className="mb-8 flex justify-between w-full max-w-md items-center">
+                <h1 className="text-3xl font-bold text-emerald-900">Guess the Word</h1>
+                <div className="flex items-center gap-4">
+                    <div className="text-sm font-bold text-emerald-700">Score: {score}</div>
+                    <button onClick={initGame} className="p-2 bg-emerald-600 text-white rounded hover:bg-emerald-700"><RefreshCw size={16} /></button>
+                </div>
+            </div>
+
+            <div className="w-full max-w-md bg-white p-6 rounded-2xl shadow-sm border border-emerald-100">
+                {!gameOver ? (
+                    <>
+                        <div className="text-sm text-emerald-500 font-bold mb-2">Question {currentQ + 1} of {gameQuestions.length}</div>
+                        <h2 className="text-xl font-medium text-slate-800 mb-6">{gameQuestions[currentQ].q}</h2>
+                        
+                        <form onSubmit={handleGuess} className="space-y-4">
+                            <input 
+                                type="text" 
+                                value={guess}
+                                onChange={e => setGuess(e.target.value)}
+                                placeholder="Type your answer..."
+                                className="w-full p-3 border border-emerald-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 uppercase font-bold text-lg tracking-widest disabled:opacity-50 disabled:bg-emerald-50"
+                                autoFocus
+                                disabled={!!message}
+                            />
+                            <button type="submit" disabled={!!message} className="w-full py-3 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700 transition-colors disabled:opacity-50">
+                                Submit Guess
+                            </button>
+                        </form>
+                        
+                        {message && (
+                            <div className={`mt-4 p-3 rounded-lg text-center font-bold ${message.includes('Correct') ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                {message}
+                            </div>
+                        )}
+                    </>
+                ) : (
+                    <div className="text-center py-8">
+                        <div className="text-4xl mb-4">🏆</div>
+                        <h2 className="text-2xl font-bold text-emerald-900 mb-2">Game Complete!</h2>
+                        <p className="text-emerald-600 mb-6">{message}</p>
+                        <button onClick={initGame} className="px-6 py-3 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700 transition-colors">
+                            Play Again
+                        </button>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+
 // --- Main Games App ---
 export const GamesApp = () => {
-    const [activeGame, setActiveGame] = useState<'Snake' | 'Minesweeper' | '2048' | null>(null);
+    const [activeGame, setActiveGame] = useState<'Snake' | 'Minesweeper' | '2048' | 'GeometryMatch' | 'GuessTheWord' | null>(null);
 
     if (activeGame === 'Snake') return (
         <div className="h-full flex flex-col">
@@ -491,6 +750,24 @@ export const GamesApp = () => {
                 <button onClick={() => setActiveGame(null)} className="px-3 py-1 bg-slate-200 rounded hover:bg-slate-300 text-sm font-medium">← Back to Games</button>
             </div>
             <div className="flex-1 overflow-hidden"><Game2048 /></div>
+        </div>
+    );
+
+    if (activeGame === 'GeometryMatch') return (
+        <div className="h-full flex flex-col">
+            <div className="bg-indigo-50 text-slate-800 p-2 flex items-center gap-2 border-b border-indigo-100">
+                <button onClick={() => setActiveGame(null)} className="px-3 py-1 bg-indigo-200 rounded hover:bg-indigo-300 text-sm font-medium text-indigo-900">← Back to Games</button>
+            </div>
+            <div className="flex-1 overflow-hidden"><GeometryMatchGame /></div>
+        </div>
+    );
+
+    if (activeGame === 'GuessTheWord') return (
+        <div className="h-full flex flex-col">
+            <div className="bg-emerald-50 text-slate-800 p-2 flex items-center gap-2 border-b border-emerald-100">
+                <button onClick={() => setActiveGame(null)} className="px-3 py-1 bg-emerald-200 rounded hover:bg-emerald-300 text-sm font-medium text-emerald-900">← Back to Games</button>
+            </div>
+            <div className="flex-1 overflow-hidden"><GuessTheWordGame /></div>
         </div>
     );
 
@@ -539,6 +816,30 @@ export const GamesApp = () => {
                         </div>
                         <h2 className="text-xl font-bold text-slate-900 mb-2">2048</h2>
                         <p className="text-slate-500 text-sm">Slide and merge tiles with the same numbers to reach the legendary 2048 tile.</p>
+                    </button>
+
+                    {/* Geometry Match Card */}
+                    <button 
+                        onClick={() => setActiveGame('GeometryMatch')}
+                        className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 hover:shadow-md hover:border-indigo-300 transition-all text-left group"
+                    >
+                        <div className="w-12 h-12 bg-indigo-100 text-indigo-600 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                            <LucideIcons.Shapes size={24} />
+                        </div>
+                        <h2 className="text-xl font-bold text-slate-900 mb-2">Geometry Match</h2>
+                        <p className="text-slate-500 text-sm">Test your memory by matching pairs of geometric shapes hidden behind cards.</p>
+                    </button>
+
+                    {/* Guess the Word Card */}
+                    <button 
+                        onClick={() => setActiveGame('GuessTheWord')}
+                        className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 hover:shadow-md hover:border-indigo-300 transition-all text-left group"
+                    >
+                        <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                            <LucideIcons.MessageCircleQuestion size={24} />
+                        </div>
+                        <h2 className="text-xl font-bold text-slate-900 mb-2">Guess the Word</h2>
+                        <p className="text-slate-500 text-sm">Answer easy global trivia questions and guess the correct word to win.</p>
                     </button>
                 </div>
             </div>

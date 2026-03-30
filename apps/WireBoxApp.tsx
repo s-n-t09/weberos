@@ -235,16 +235,28 @@ export const WireBoxApp = ({ user, setUser, openApp }: { user: UserProfile, setU
     }, []);
 
     const handleDownload = async (url: string) => {
-        const fileName = url.split('/').pop() || 'downloaded_file';
+        let fileName = url.split('/').pop() || 'downloaded_file';
+        if (fileName.includes('?')) fileName = fileName.split('?')[0];
+        if (url.startsWith('data:')) {
+            const mime = url.split(';')[0].split(':')[1];
+            const ext = mime ? mime.split('/')[1] : 'bin';
+            fileName = `download_${Date.now()}.${ext}`;
+        }
+
         const downloadId = Date.now().toString();
         
         setDownloads(prev => [...prev, { id: downloadId, fileName, url, progress: 0, status: 'downloading' }]);
         setMenuView('downloads');
 
         try {
-            // Use proxy to fetch the file to avoid CORS
-            const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`);
-            if (!res.ok) throw new Error('Network response was not ok');
+            let res: Response;
+            try {
+                res = await fetch(url);
+                if (!res.ok) throw new Error('Direct fetch failed');
+            } catch (e) {
+                res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`);
+                if (!res.ok) throw new Error('Proxy fetch failed');
+            }
             
             const blob = await res.blob();
             const reader = new FileReader();
@@ -389,13 +401,13 @@ export const WireBoxApp = ({ user, setUser, openApp }: { user: UserProfile, setU
                             )}
 
                             {menuView === 'downloads' && (
-                                <div className="flex flex-col h-full">
-                                    <div className="p-3 border-b border-slate-100 font-bold text-slate-800 flex items-center gap-2">
+                                <div className="flex flex-col max-h-[32rem]">
+                                    <div className="p-3 border-b border-slate-100 font-bold text-slate-800 flex items-center gap-2 shrink-0">
                                         <button onClick={() => setMenuView('main')} className="p-1 hover:bg-slate-100 rounded-lg"><ArrowLeft size={16}/></button>
                                         <span className="flex-1">Downloads</span>
                                         {downloads.length > 0 && <button onClick={() => setDownloads([])} className="text-xs text-blue-600 hover:underline">Clear</button>}
                                     </div>
-                                    <div className="overflow-y-auto p-2 flex-1">
+                                    <div className="overflow-y-auto p-2 flex-1 min-h-0">
                                         {downloads.length === 0 ? (
                                             <div className="text-center text-slate-500 py-8 text-sm">No downloads yet</div>
                                         ) : (
@@ -418,12 +430,12 @@ export const WireBoxApp = ({ user, setUser, openApp }: { user: UserProfile, setU
                             )}
 
                             {menuView === 'extensions' && (
-                                <div className="flex flex-col h-full">
-                                    <div className="p-3 border-b border-slate-100 font-bold text-slate-800 flex items-center gap-2">
+                                <div className="flex flex-col max-h-[32rem]">
+                                    <div className="p-3 border-b border-slate-100 font-bold text-slate-800 flex items-center gap-2 shrink-0">
                                         <button onClick={() => setMenuView('main')} className="p-1 hover:bg-slate-100 rounded-lg"><ArrowLeft size={16}/></button>
                                         <span className="flex-1">Extensions</span>
                                     </div>
-                                    <div className="overflow-y-auto p-4 flex-1 flex flex-col gap-4">
+                                    <div className="overflow-y-auto p-4 flex-1 flex flex-col gap-4 min-h-0">
                                         <div className="flex items-center justify-between">
                                             <div>
                                                 <div className="text-sm font-medium text-slate-800">Simple Adblocker</div>
@@ -494,12 +506,12 @@ export const WireBoxApp = ({ user, setUser, openApp }: { user: UserProfile, setU
                             )}
 
                             {menuView === 'media_grabber' && (
-                                <div className="flex flex-col h-full">
-                                    <div className="p-3 border-b border-slate-100 font-bold text-slate-800 flex items-center gap-2">
+                                <div className="flex flex-col max-h-[32rem]">
+                                    <div className="p-3 border-b border-slate-100 font-bold text-slate-800 flex items-center gap-2 shrink-0">
                                         <button onClick={() => setMenuView('main')} className="p-1 hover:bg-slate-100 rounded-lg"><ArrowLeft size={16}/></button>
                                         <span className="flex-1">Media Grabber</span>
                                     </div>
-                                    <div className="overflow-y-auto p-2 flex-1">
+                                    <div className="overflow-y-auto p-2 flex-1 min-h-0">
                                         {!activeTab.media || activeTab.media.length === 0 ? (
                                             <div className="text-center text-slate-500 py-8 text-sm">No media found on this page</div>
                                         ) : (
@@ -537,12 +549,12 @@ export const WireBoxApp = ({ user, setUser, openApp }: { user: UserProfile, setU
                             )}
 
                             {menuView === 'settings' && (
-                                <div className="flex flex-col h-full">
-                                    <div className="p-3 border-b border-slate-100 font-bold text-slate-800 flex items-center gap-2">
+                                <div className="flex flex-col max-h-[32rem]">
+                                    <div className="p-3 border-b border-slate-100 font-bold text-slate-800 flex items-center gap-2 shrink-0">
                                         <button onClick={() => setMenuView('main')} className="p-1 hover:bg-slate-100 rounded-lg"><ArrowLeft size={16}/></button>
                                         <span className="flex-1">Settings</span>
                                     </div>
-                                    <div className="p-4 flex-1">
+                                    <div className="overflow-y-auto p-4 flex-1 min-h-0">
                                         <div className="mb-4">
                                             <label className="text-sm font-medium text-slate-700 block mb-2">Default Search Engine</label>
                                             <select 
