@@ -37,8 +37,7 @@ import { VolumePopup } from './components/VolumePopup';
 import { OpenWithDialog } from './components/OpenWithDialog';
 import { DialogHost, osAlert } from './components/DialogHost';
 import { DesktopIcon } from './components/DesktopIcon';
-
-import swUrl from './utils/sw.js?url';
+import { playClick, playLogin, playLogout, playNotification } from './utils/sounds';
 
 import { TerminalApp } from './apps/TerminalApp';
 import { ExplorerApp } from './apps/ExplorerApp';
@@ -51,8 +50,8 @@ import { WePlayerApp } from './apps/WePlayerApp';
 import { WireBoxApp } from './apps/WireBoxApp';
 import { CalcoApp, WeatherApp, DynamicAppRuntime } from './apps/MiscApps';
 import { GamesApp } from './apps/GamesApp';
-import { PermTesterApp } from './apps/PermTesterApp';
 import { InstallerApp } from './apps/InstallerApp';
+import { NotifTesterApp } from './apps/NotifTesterApp';
 
 // Registry
 const SYSTEM_REGISTRY: Record<string, { name: string, icon: any, color: string }> = {
@@ -68,14 +67,39 @@ const SYSTEM_REGISTRY: Record<string, { name: string, icon: any, color: string }
   'helper': { name: 'Helper', icon: HelpCircle, color: 'bg-purple-500' },
   'wepic': { name: 'WePic', icon: ImageIcon, color: 'bg-pink-500' },
   'weplayer': { name: 'WePlayer', icon: Film, color: 'bg-rose-600' },
-  'permtester': { name: 'Perm Tester', icon: Shield, color: 'bg-emerald-600' },
   'installer': { name: 'Program Installer', icon: Package, color: 'bg-indigo-500' },
+  'notiftester': { name: 'Notif Tester', icon: Bell, color: 'bg-amber-500' },
 };
+
+const PRO_TIPS = [
+    "Use the Coder app to create your own .wbr applications.",
+    "WeGroq in the Coder app can help you write code using AI.",
+    "You can drag and drop files into the Explorer to upload them.",
+    "Use Settings to change your wallpaper and customize your experience.",
+    "The Market app has new games and tools to download.",
+    "You can arrange desktop icons by dragging them around.",
+    "Use the Terminal to navigate the file system using commands.",
+    "WeberOS supports multi-line code in .wbr files.",
+    "Check the Helper app if you get stuck or need guidance.",
+    "You can create multiple user profiles for different workspaces.",
+    "Apps can request permissions like camera, microphone, and geolocation.",
+    "Use WePic to view and manage your images.",
+    "WePlayer supports playing audio and video files.",
+    "WireBox is your gateway to the web inside WeberOS.",
+    "You can uninstall apps from the Settings menu.",
+    "Notifications keep you updated on system events.",
+    "The FileSystem API allows apps to read and write files.",
+    "You can set default apps for specific file extensions in Settings.",
+    "Use the 'Use .wbr Template' button in Coder to start quickly.",
+    "WeberOS 2 brings a fresh new UI and improved performance."
+];
 
 const WeberOS = () => {
   const [booting, setBooting] = useState(true);
   const [bootProgress, setBootProgress] = useState(0);
-  const [bootStatus, setBootStatus] = useState('Initializing WeberOS 1.9...');
+  const [bootStatus, setBootStatus] = useState('Initializing WeberOS 2...');
+
+  const [proTip] = useState(() => PRO_TIPS[Math.floor(Math.random() * PRO_TIPS.length)]);
 
   const [user, setUserState] = useState<UserProfile | null>(null);
   const [usersList, setUsersList] = useState<UserProfile[]>([]);
@@ -105,11 +129,6 @@ const WeberOS = () => {
 
   // Boot Animation Logic
   useEffect(() => {
-    // Register Service Worker for notifications
-    if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register(swUrl).catch(err => console.warn('SW registration failed:', err));
-    }
-
     const handleResize = () => setWindowSize({ w: window.innerWidth, h: window.innerHeight });
     window.addEventListener('resize', handleResize);
 
@@ -138,6 +157,17 @@ const WeberOS = () => {
         clearInterval(interval);
         window.removeEventListener('resize', handleResize);
     };
+  }, []);
+
+  useEffect(() => {
+      const handleGlobalClick = (e: MouseEvent) => {
+          const target = e.target as HTMLElement;
+          if (target.closest('button') || target.closest('a') || target.closest('[role="button"]')) {
+              playClick();
+          }
+      };
+      document.addEventListener('click', handleGlobalClick);
+      return () => document.removeEventListener('click', handleGlobalClick);
   }, []);
 
   useEffect(() => {
@@ -201,6 +231,7 @@ const WeberOS = () => {
     const storedUser = db[selectedProfile.username];
 
     if (storedUser && (storedUser.password === passwordInput || !storedUser.password)) {
+        playLogin();
         const safeUser: UserProfile = {
             username: storedUser.username,
             installedPackages: storedUser.installedPackages || [],
@@ -210,7 +241,7 @@ const WeberOS = () => {
                 wallpaper: storedUser.settings?.wallpaper || WALLPAPERS[0], 
                 desktopIcons: storedUser.settings?.desktopIcons || {},
                 weather: storedUser.settings?.weather || { mode: 'auto' },
-                notifications: storedUser.settings?.notifications || { enabled: true, sound: true, external: false },
+                notifications: storedUser.settings?.notifications || { enabled: true, sound: true },
                 defaultApps: storedUser.settings?.defaultApps || {}
             }
         };
@@ -235,7 +266,7 @@ const WeberOS = () => {
               wallpaper: setupWallpaper, 
               desktopIcons: {},
               weather: { mode: 'auto' },
-              notifications: { enabled: true, sound: true, external: false },
+              notifications: { enabled: true, sound: true },
               defaultApps: {}
           }
       };
@@ -268,7 +299,6 @@ const WeberOS = () => {
 
   const requestPermissions = async () => {
       try {
-          if ('Notification' in window) await Notification.requestPermission();
           await navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then(s => s.getTracks().forEach(t => t.stop())).catch(() => {});
           if ('geolocation' in navigator) navigator.geolocation.getCurrentPosition(() => {}, () => {});
       } catch (e) {
@@ -278,6 +308,7 @@ const WeberOS = () => {
   };
 
   const [hasWelcomed, setHasWelcomed] = useState(false);
+  const [hasCheckedUpgrades, setHasCheckedUpgrades] = useState(false);
 
   useEffect(() => {
     if (user && !hasWelcomed) {
@@ -290,7 +321,77 @@ const WeberOS = () => {
     }
   }, [user, hasWelcomed]);
 
+  useEffect(() => {
+    if (user && !hasCheckedUpgrades) {
+        setHasCheckedUpgrades(true);
+        const checkUpgrades = async () => {
+            try {
+                const categoryModules = import.meta.glob('/market/*.json', { eager: true });
+                let allMarketApps: any[] = [];
+                for (const [path, module] of Object.entries(categoryModules)) {
+                    const apps = (module as any).default || module;
+                    if (Array.isArray(apps)) {
+                        allMarketApps = [...allMarketApps, ...apps];
+                    }
+                }
+                
+                let upgradesFound = 0;
+                const wbrModules = import.meta.glob('/market/apps/*.wbr', { query: '?raw', import: 'default' });
+                
+                for (const installedId of user.installedPackages) {
+                    const customApp = user.customApps[installedId];
+                    if (!customApp) continue;
+
+                    let latestVersion = null;
+                    const marketApp = allMarketApps.find(a => a.id === installedId);
+                    if (marketApp && marketApp.version) {
+                        latestVersion = marketApp.version;
+                    }
+
+                    const locationToCheck = customApp.location || (marketApp && marketApp.location);
+
+                    if (locationToCheck) {
+                        try {
+                            const wbrPath = locationToCheck.startsWith('/') ? locationToCheck : `/${locationToCheck}`;
+                            
+                            if (wbrModules[wbrPath]) {
+                                const rawData = await wbrModules[wbrPath]();
+                                const wbrData = JSON.parse(rawData as string);
+                                if (wbrData.version) latestVersion = wbrData.version;
+                            } else {
+                                const res = await fetch(wbrPath);
+                                if (res.ok) {
+                                    const wbrData = await res.json();
+                                    if (wbrData.version) latestVersion = wbrData.version;
+                                }
+                            }
+                        } catch (e) {
+                            console.error(`Failed to check upgrade for ${installedId}`, e);
+                        }
+                    }
+
+                    if (latestVersion && customApp.version && latestVersion !== customApp.version) {
+                        upgradesFound++;
+                    }
+                }
+                
+                if (upgradesFound > 0) {
+                    setTimeout(() => {
+                        sendNotification('market', 'App Updates Available', `You have ${upgradesFound} app update(s) available in the Market.`);
+                    }, 3000);
+                }
+            } catch (e) {
+                console.error('Failed to check for upgrades', e);
+            }
+        };
+        checkUpgrades();
+    } else if (!user) {
+        setHasCheckedUpgrades(false);
+    }
+  }, [user, hasCheckedUpgrades]);
+
   const handleLogout = () => {
+      playLogout();
       setUserState(null);
       setWindows([]);
       setStartOpen(false);
@@ -301,6 +402,7 @@ const WeberOS = () => {
 
   const sendNotification = (appId: string, title: string, message: string) => {
       if (!user?.settings.notifications.enabled) return;
+      if (user?.settings.notifications.sound !== false) playNotification();
 
       const newNotif: SystemNotification = {
           id: Date.now().toString() + Math.random().toString(36).substring(7),
@@ -315,43 +417,6 @@ const WeberOS = () => {
       setTimeout(() => {
           setActivePopups(prev => prev.filter(n => n.id !== newNotif.id));
       }, 3000);
-
-      if (user.settings.notifications.external && 'Notification' in window) {
-          const showExternal = async () => {
-              try {
-                  const triggerNotification = async () => {
-                      if ('serviceWorker' in navigator) {
-                          const registration = await navigator.serviceWorker.ready;
-                          if (registration) {
-                              await registration.showNotification(title, { body: message });
-                              return;
-                          }
-                      }
-                      new Notification(title, { body: message });
-                  };
-
-                  if (Notification.permission === 'granted') {
-                      try {
-                          await triggerNotification();
-                      } catch (e) {
-                          console.warn("External notification failed:", e);
-                      }
-                  } else if (Notification.permission !== 'denied') {
-                      const permission = await Notification.requestPermission();
-                      if (permission === 'granted') {
-                          try {
-                              await triggerNotification();
-                          } catch (e) {
-                              console.warn("External notification failed:", e);
-                          }
-                      }
-                  }
-              } catch (err) {
-                  console.warn("External notification error:", err);
-              }
-          };
-          showExternal();
-      }
   };
 
   const openApp = (appId: string, data?: any) => {
@@ -529,16 +594,28 @@ const WeberOS = () => {
   // Boot Screen
   if (booting) {
       return (
-          <div className="h-screen w-screen bg-black flex flex-col items-center justify-center text-white font-sans">
-              <div className="relative mb-8">
-                  <img src="https://files.catbox.moe/uumgd2.png" alt="WeberOS" className="w-24 h-24 animate-pulse" />
-                  <div className="absolute inset-0 rounded-full border-4 border-blue-500/20 border-t-blue-500 animate-spin"></div>
+          <div className="h-screen w-screen bg-[#050505] flex flex-col items-center justify-center text-white font-sans overflow-hidden relative">
+              {/* Background ambient glow */}
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-blue-600/10 rounded-full blur-[100px] animate-pulse"></div>
+              
+              <div className="z-10 flex flex-col items-center animate-in fade-in zoom-in duration-1000">
+                  <div className="relative mb-8 group">
+                      <div className="absolute -inset-4 bg-gradient-to-r from-blue-600 to-cyan-400 rounded-full opacity-20 blur-xl transition-opacity duration-1000 animate-pulse"></div>
+                      <img src="https://files.catbox.moe/la7h20.png" alt="WeberOS 2" className="w-32 h-32 relative z-10 drop-shadow-[0_0_15px_rgba(59,130,246,0.5)]" />
+                  </div>
+                  
+                  <h1 className="text-4xl font-black tracking-tighter mb-8 bg-clip-text text-transparent bg-gradient-to-r from-white via-blue-100 to-slate-400 drop-shadow-sm">
+                      WeberOS 2
+                  </h1>
+                  
+                  <div className="w-80 h-[2px] bg-white/5 rounded-full overflow-hidden mb-6 relative">
+                      <div className="absolute top-0 left-0 h-full bg-gradient-to-r from-blue-600 via-cyan-400 to-blue-600 transition-all duration-300 ease-out shadow-[0_0_10px_rgba(34,211,238,0.8)]" style={{ width: `${bootProgress}%` }}></div>
+                  </div>
+                  
+                  <p className="text-[10px] text-slate-500 font-mono uppercase tracking-[0.2em] animate-pulse">
+                      {bootStatus}
+                  </p>
               </div>
-              <h1 className="text-2xl font-bold tracking-widest mb-2">WeberOS</h1>
-              <div className="w-64 h-1 bg-white/10 rounded-full overflow-hidden mb-4">
-                  <div className="h-full bg-blue-500 transition-all duration-300" style={{ width: `${bootProgress}%` }}></div>
-              </div>
-              <p className="text-xs text-slate-500 font-mono uppercase tracking-tighter">{bootStatus}</p>
           </div>
       );
   }
@@ -724,6 +801,9 @@ const WeberOS = () => {
                       </div>
                   )}
               </div>
+              <div className="absolute bottom-8 left-0 right-0 text-center text-slate-500 text-sm animate-in fade-in duration-1000 delay-500 px-4">
+                  <span className="font-bold text-slate-400">Pro Tip:</span> {proTip}
+              </div>
           </div>
       );
   }
@@ -853,8 +933,8 @@ const WeberOS = () => {
             else if (win.appId === 'wepic') AppContent = <WePicApp fs={fs} launchData={win.data} openFilePicker={openFilePicker} />;
             else if (win.appId === 'weplayer') AppContent = <WePlayerApp fs={fs} launchData={win.data} openFilePicker={openFilePicker} volume={volume} />;
             else if (win.appId === 'wirebox') AppContent = <WireBoxApp user={user} setUser={setUser} openApp={openApp} />;
-            else if (win.appId === 'permtester') AppContent = <PermTesterApp />;
             else if (win.appId === 'installer') AppContent = <InstallerApp fs={fs} launchData={win.data} user={user} setUser={setUser} onNotify={sendNotification} closeWindow={() => closeWindow(win.id)} />;
+            else if (win.appId === 'notiftester') AppContent = <NotifTesterApp onNotify={sendNotification} />;
             
             else if (user.customApps[win.appId]) {
                 AppContent = <DynamicAppRuntime 

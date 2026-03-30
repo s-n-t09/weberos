@@ -3,7 +3,7 @@
   <a href="https://github.com/s-n-t09/weberos">
     <img src="/logo.png" alt="WeberOS Logo" width="125" height="125">
   </a>
-  <h1 align="center">WeberOS v1.9</h1>
+  <h1 align="center">WeberOS v2.0</h1>
 
   <p align="center">
     <strong>Next-Gen Web-Based Operating System Simulator</strong>
@@ -126,13 +126,14 @@ npm run preview
 | :--- | :---: | :--- |
 | **Explorer** | 📁 | File manager for browsing directories and managing files. |
 | **Terminal** | 📟 | Command-line interface for advanced operations. |
-| **Coder** | 📝 | Code editor supporting text and `.wbr` files. |
+| **Coder** | 📝 | Code editor supporting text and `.wbr` files, with WeGroq AI assistant. |
 | **Settings** | ⚙️ | System configuration (Wallpaper, Profiles, Weather). |
 | **Wire Box** | 🌍📦 | Simple Web browser for the system. |
 | **Market** | 🛍️ | App store to discover and install new packages. |
 | **WePlayer** | 🎬 | Video and Music player with simple style and timestamp control. |
 | **WePic** | 🖼️ | Image viewer for standard image formats. |
-| **Snake** | 🐍 | Classic Snake game. |
+| **Games** | 🎮 | Collection of games including Snake, Geometry Match, and Guess the Word. |
+| **Notif Tester** | 🔔 | Test in-OS notifications and generate .wbr code snippets. |
 | **Calco** | 🧮 | Basic arithmetic calculator. |
 | **Weather** | ☁️ | Real-time weather updates (requires location access). |
 
@@ -166,7 +167,11 @@ WeberOS supports a unique feature called **Weber Runtime (.wbr)**. You can write
   "name": "My App",
   "icon": "Star",
   "version": "1.0.0",
-  "code": "return () => React.createElement('div', {className: 'flex items-center justify-center h-full text-2xl font-bold'}, 'Hello World!')"
+  "code": [
+    "return function App() {",
+    "  return React.createElement('div', { className: 'flex items-center justify-center h-full text-2xl font-bold' }, 'Hello World!');",
+    "}"
+  ]
 }
 ```
 
@@ -181,13 +186,13 @@ To publish your app to the WeberOS Market:
 
 ---
 
-## 🛡️ API Permissions (v1.8)
+## 🛡️ API Permissions (v2.0)
 
-In version 1.8, you can request system permissions in your `.wbr` manifest to access advanced features.
+In version 2.0, you can request system permissions in your `.wbr` manifest to access advanced features.
 
 | Permission | Description | API Access |
 | :--- | :--- | :--- |
-| `notifications` | Send system and browser notifications | `Sys.notify(title, message)` |
+| `notifications` | Send in-OS system notifications | `Sys.notify(title, message)` |
 | `camera` | Access the user's camera | `Sys.requestCamera()` |
 | `microphone` | Access the user's microphone | `Sys.requestMic()` |
 | `geolocation` | Access real-time location | `Sys.getLocation()` |

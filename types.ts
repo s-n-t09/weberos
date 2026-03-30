@@ -58,7 +58,6 @@ export type UserProfile = {
       notifications: {
           enabled: boolean;
           sound: boolean;
-          external: boolean; // Browser notifications
       };
       defaultApps: Record<string, string>; // ext -> appId
   }
