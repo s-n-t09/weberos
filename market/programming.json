@@ -6,6 +6,6 @@
   "author": "S.N.T",
   "description": "Create wbr apps easily with live preview",
   "location": "market/apps/wesandbox.wbr",
-  "permissions": []
+  "permissions": ["fs", "notifications", "camera", "microphone", "geolocation"]
  }
 ]
