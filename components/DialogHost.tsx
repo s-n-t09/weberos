@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { AlertTriangle, Info, X } from 'lucide-react';
+import { playError } from '../utils/sounds';
 
 export type DialogOptions = {
   title?: string;
@@ -26,7 +27,10 @@ export const showDialog = (options: DialogOptions): Promise<any> => {
   });
 };
 
-export const osAlert = (message: string, title?: string) => showDialog({ message, title, type: 'alert' }) as Promise<boolean>;
+export const osAlert = (message: string, title?: string) => {
+    playError();
+    return showDialog({ message, title, type: 'alert' }) as Promise<boolean>;
+};
 export const osConfirm = (message: string, title?: string) => showDialog({ message, title, type: 'confirm' }) as Promise<boolean>;
 export const osPrompt = (message: string, defaultValue?: string, title?: string) => showDialog({ message, title, type: 'prompt', defaultValue }) as Promise<string | null>;
 
