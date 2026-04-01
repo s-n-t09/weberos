@@ -60,5 +60,6 @@ export type UserProfile = {
           sound: boolean;
       };
       defaultApps: Record<string, string>; // ext -> appId
+      shortcuts?: { id: string, name: string, path: string, type: 'file' | 'dir' }[];
   }
 };

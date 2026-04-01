@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import * as LucideIcons from 'lucide-react';
 import { 
@@ -27,7 +27,12 @@ import {
     Plus,
     Lock,
     Key,
-    Shield
+    Shield,
+    FileText,
+    RefreshCw,
+    Settings,
+    Maximize,
+    Link as LinkIcon
 } from 'lucide-react';
 
 import { UserProfile, WindowState, FileSystemNode, SystemNotification } from './types';
@@ -90,7 +95,7 @@ const PRO_TIPS = [
     "Notifications keep you updated on system events.",
     "The FileSystem API allows apps to read and write files.",
     "You can set default apps for specific file extensions in Settings.",
-    "Use the 'Use .wbr Template' button in Coder to start quickly.",
+    "Use the 'Weber Coder' tab in Coder to start building apps quickly.",
     "WeberOS 2 brings a fresh new UI and improved performance."
 ];
 
@@ -126,6 +131,14 @@ const WeberOS = () => {
 
   const [openWithRequest, setOpenWithRequest] = useState<{file: string, apps: any[]} | null>(null);
   const [windowSize, setWindowSize] = useState({ w: window.innerWidth, h: window.innerHeight });
+
+  const [contextMenu, setContextMenu] = useState<{x: number, y: number} | null>(null);
+  const [showShortcutPrompt, setShowShortcutPrompt] = useState(false);
+  const [shortcutPath, setShortcutPath] = useState('');
+  const [shortcutName, setShortcutName] = useState('');
+  const [shortcutType, setShortcutType] = useState<'file'|'dir'>('file');
+
+  const touchTimer = useRef<any>(null);
 
   // Boot Animation Logic
   useEffect(() => {
@@ -801,12 +814,55 @@ const WeberOS = () => {
                       </div>
                   )}
               </div>
-              <div className="absolute bottom-8 left-0 right-0 text-center text-slate-500 text-sm animate-in fade-in duration-1000 delay-500 px-4">
+              <div className="absolute bottom-20 md:bottom-12 left-0 right-0 text-center text-slate-500 text-sm animate-in fade-in duration-1000 delay-500 px-4">
                   <span className="font-bold text-slate-400">Pro Tip:</span> {proTip}
               </div>
           </div>
       );
   }
+
+  const taskbarStyle = user?.settings?.taskbarStyle || 'default';
+  const taskbarClasses = {
+      default: 'bg-slate-900/80 border-white/10',
+      dark: 'bg-black/95 border-white/5',
+      glass: 'bg-white/10 border-white/20',
+      transparent: 'bg-transparent border-transparent'
+  }[taskbarStyle as 'default' | 'dark' | 'glass' | 'transparent'] || 'bg-slate-900/80 border-white/10';
+
+  const handleDesktopContextMenu = (e: React.MouseEvent) => {
+      e.preventDefault();
+      setContextMenu({ x: e.clientX, y: e.clientY });
+  };
+  const handleDesktopTouchStart = (e: React.TouchEvent) => {
+      if (e.touches.length === 1) {
+          touchTimer.current = setTimeout(() => {
+              setContextMenu({ x: e.touches[0].clientX, y: e.touches[0].clientY });
+          }, 500);
+      }
+  };
+  const handleDesktopTouchEnd = () => {
+      if (touchTimer.current) clearTimeout(touchTimer.current);
+  };
+
+  const addShortcut = () => {
+      if (!shortcutName || !shortcutPath) return;
+      const newShortcut = {
+          id: 'shortcut_' + Date.now(),
+          name: shortcutName,
+          path: shortcutPath,
+          type: shortcutType
+      };
+      setUser({
+          ...user!,
+          settings: {
+              ...user!.settings,
+              shortcuts: [...(user!.settings.shortcuts || []), newShortcut]
+          }
+      });
+      setShowShortcutPrompt(false);
+      setShortcutName('');
+      setShortcutPath('');
+  };
 
   return (
     <div className={`h-screen w-screen overflow-hidden relative font-sans select-none`}
@@ -816,9 +872,109 @@ const WeberOS = () => {
             backgroundPosition: 'center',
             transition: 'background-image 0.5s ease-in-out'
         }}
-        onClick={() => { setShowVolumePopup(false); setShowNotifPanel(false); setStartOpen(false); setStartSearchQuery(''); }}
+        onClick={() => { setShowVolumePopup(false); setShowNotifPanel(false); setStartOpen(false); setStartSearchQuery(''); setContextMenu(null); }}
+        onContextMenu={handleDesktopContextMenu}
+        onTouchStart={handleDesktopTouchStart}
+        onTouchEnd={handleDesktopTouchEnd}
+        onTouchMove={handleDesktopTouchEnd}
     >
         <input type="file" id="hidden-file-input" onChange={handleFileUpload} className="hidden" />
+
+        {contextMenu && (
+            <div 
+                className="fixed bg-slate-900/90 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl py-1 z-[300] min-w-[160px]"
+                style={{ left: contextMenu.x, top: contextMenu.y }}
+                onClick={(e) => e.stopPropagation()}
+            >
+                <button 
+                    className="w-full text-left px-4 py-2 text-sm text-slate-200 hover:bg-white/10 transition flex items-center gap-2"
+                    onClick={() => {
+                        // Refresh desktop display (just re-render by updating state slightly or doing nothing since React handles it)
+                        setContextMenu(null);
+                        setWindowSize({ w: window.innerWidth, h: window.innerHeight });
+                    }}
+                >
+                    <RefreshCw size={14} /> Refresh
+                </button>
+                <button 
+                    className="w-full text-left px-4 py-2 text-sm text-slate-200 hover:bg-white/10 transition flex items-center gap-2"
+                    onClick={() => {
+                        setContextMenu(null);
+                        openApp('settings');
+                    }}
+                >
+                    <Settings size={14} /> Settings
+                </button>
+                <button 
+                    className="w-full text-left px-4 py-2 text-sm text-slate-200 hover:bg-white/10 transition flex items-center gap-2"
+                    onClick={() => {
+                        setContextMenu(null);
+                        if (!document.fullscreenElement) {
+                            document.documentElement.requestFullscreen().catch(() => {});
+                        } else {
+                            document.exitFullscreen().catch(() => {});
+                        }
+                    }}
+                >
+                    <Maximize size={14} /> Fullscreen
+                </button>
+                <div className="h-px bg-white/10 my-1"></div>
+                <button 
+                    className="w-full text-left px-4 py-2 text-sm text-slate-200 hover:bg-white/10 transition flex items-center gap-2"
+                    onClick={() => {
+                        setContextMenu(null);
+                        setShowShortcutPrompt(true);
+                    }}
+                >
+                    <LinkIcon size={14} /> Add Shortcut
+                </button>
+            </div>
+        )}
+
+        {showShortcutPrompt && (
+            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[400] flex items-center justify-center" onClick={() => setShowShortcutPrompt(false)}>
+                <div className="bg-slate-900 border border-white/10 rounded-2xl p-6 w-96 shadow-2xl" onClick={e => e.stopPropagation()}>
+                    <h2 className="text-xl font-bold text-white mb-4">Add Shortcut</h2>
+                    <div className="space-y-4">
+                        <div>
+                            <label className="block text-xs text-slate-400 mb-1">Name</label>
+                            <input 
+                                type="text" 
+                                value={shortcutName} 
+                                onChange={e => setShortcutName(e.target.value)}
+                                className="w-full bg-white/5 border border-white/10 rounded-xl p-2 text-white outline-none focus:border-blue-500"
+                                placeholder="e.g. My Document"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs text-slate-400 mb-1">Path</label>
+                            <input 
+                                type="text" 
+                                value={shortcutPath} 
+                                onChange={e => setShortcutPath(e.target.value)}
+                                className="w-full bg-white/5 border border-white/10 rounded-xl p-2 text-white outline-none focus:border-blue-500"
+                                placeholder="e.g. /home/user/doc.txt"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs text-slate-400 mb-1">Type</label>
+                            <select 
+                                value={shortcutType} 
+                                onChange={e => setShortcutType(e.target.value as 'file'|'dir')}
+                                className="w-full bg-white/5 border border-white/10 rounded-xl p-2 text-white outline-none focus:border-blue-500"
+                            >
+                                <option value="file">File</option>
+                                <option value="dir">Folder</option>
+                            </select>
+                        </div>
+                        <div className="flex justify-end gap-2 mt-6">
+                            <button onClick={() => setShowShortcutPrompt(false)} className="px-4 py-2 rounded-xl text-slate-300 hover:bg-white/5 transition">Cancel</button>
+                            <button onClick={addShortcut} disabled={!shortcutName || !shortcutPath} className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white transition disabled:opacity-50">Add</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        )}
 
         {openWithRequest && (
             <OpenWithDialog 
@@ -841,6 +997,8 @@ const WeberOS = () => {
                     
                     const appsToRender = availableApps.filter(app => !['settings', 'helper', 'wepic', 'weplayer', 'installer'].includes(app.id));
                     
+                    const shortcutsToRender = user?.settings.shortcuts || [];
+
                     const occupied = new Set<string>();
                     
                     // First pass: mark occupied slots from saved positions
@@ -863,27 +1021,49 @@ const WeberOS = () => {
                         }
                     });
 
+                    shortcutsToRender.forEach(sc => {
+                        const saved = user?.settings.desktopIcons?.[sc.id];
+                        if (saved) {
+                            const col = Math.round((saved.x - 16) / colWidth);
+                            const row = Math.round((saved.y - 16) / rowHeight);
+                            const key = `${col},${row}`;
+                            if (!occupied.has(key)) {
+                                occupied.add(key);
+                                savedPositions.set(sc.id, {
+                                    x: 16 + col * colWidth,
+                                    y: 16 + row * rowHeight
+                                });
+                            }
+                        }
+                    });
+
                     let nextCol = 0;
                     let nextRow = 0;
 
-                    return appsToRender.map((app) => {
+                    const getNextSlot = () => {
+                        while (occupied.has(`${nextCol},${nextRow}`)) {
+                            nextRow++;
+                            if (nextRow >= maxRows) {
+                                nextRow = 0;
+                                nextCol++;
+                            }
+                        }
+                        const x = 16 + nextCol * colWidth;
+                        const y = 16 + nextRow * rowHeight;
+                        occupied.add(`${nextCol},${nextRow}`);
+                        return { x, y };
+                    };
+
+                    const renderedApps = appsToRender.map((app) => {
                         let x, y;
                         const saved = savedPositions.get(app.id);
                         if (saved) {
                             x = saved.x;
                             y = saved.y;
                         } else {
-                            // Find next available slot
-                            while (occupied.has(`${nextCol},${nextRow}`)) {
-                                nextRow++;
-                                if (nextRow >= maxRows) {
-                                    nextRow = 0;
-                                    nextCol++;
-                                }
-                            }
-                            x = 16 + nextCol * colWidth;
-                            y = 16 + nextRow * rowHeight;
-                            occupied.add(`${nextCol},${nextRow}`);
+                            const slot = getNextSlot();
+                            x = slot.x;
+                            y = slot.y;
                         }
 
                         return (
@@ -901,6 +1081,42 @@ const WeberOS = () => {
                             />
                         );
                     });
+
+                    const renderedShortcuts = shortcutsToRender.map((sc) => {
+                        let x, y;
+                        const saved = savedPositions.get(sc.id);
+                        if (saved) {
+                            x = saved.x;
+                            y = saved.y;
+                        } else {
+                            const slot = getNextSlot();
+                            x = slot.x;
+                            y = slot.y;
+                        }
+
+                        return (
+                            <DesktopIcon
+                                key={sc.id}
+                                id={sc.id}
+                                name={sc.name}
+                                icon={sc.type === 'dir' ? Folder : FileText}
+                                color={sc.type === 'dir' ? 'bg-yellow-500' : 'bg-slate-500'}
+                                initialX={x}
+                                initialY={y}
+                                savedPosition={saved ? { x, y } : undefined}
+                                onDoubleClick={() => {
+                                    if (sc.type === 'dir') {
+                                        openApp('explorer', { path: sc.path });
+                                    } else {
+                                        launchFile(sc.path);
+                                    }
+                                }}
+                                onMove={handleDesktopIconMove}
+                            />
+                        );
+                    });
+
+                    return [...renderedApps, ...renderedShortcuts];
                 })()}
             </div>
         </div>
@@ -908,7 +1124,7 @@ const WeberOS = () => {
         {/* Windows */}
         {windows.map(win => {
             let AppContent;
-            if (win.appId === 'terminal') AppContent = <TerminalApp fs={fs} setFs={setFs} user={user} setUser={setUser} onNotify={sendNotification} />;
+            if (win.appId === 'terminal') AppContent = <TerminalApp fs={fs} setFs={setFs} user={user} setUser={setUser} onNotify={sendNotification} closeWindow={() => closeWindow(win.id)} />;
             else if (win.appId === 'coder') AppContent = <CoderApp fs={fs} setFs={setFs} launchData={win.data} />;
             else if (win.appId === 'explorer') AppContent = <ExplorerApp 
                 fs={fs} 
@@ -1065,7 +1281,7 @@ const WeberOS = () => {
         </div>
 
         {/* Taskbar */}
-        <div className={`fixed bottom-4 left-4 right-4 h-14 backdrop-blur-2xl border rounded-2xl flex items-center px-4 justify-between z-[150] shadow-2xl transition-colors bg-slate-900/80 border-white/10`}>
+        <div className={`fixed bottom-4 left-4 right-4 h-14 backdrop-blur-2xl border rounded-2xl flex items-center px-4 justify-between z-[150] shadow-2xl transition-colors ${taskbarClasses}`}>
             <div className="flex items-center gap-2">
                 <button 
                     onClick={(e) => { e.stopPropagation(); setStartOpen(!startOpen); setShowVolumePopup(false); setShowNotifPanel(false); }}
