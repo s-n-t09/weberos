@@ -5,6 +5,7 @@ import { osAlert, osConfirm } from '../components/DialogHost';
 
 export const SettingsApp = ({ user, setUser, onDeleteUser }: any) => {
     const [activeTab, setActiveTab] = useState<'profile' | 'appearance' | 'notifications' | 'defaults' | 'apps'>('profile');
+    const [customWallpaper, setCustomWallpaper] = useState('');
 
     const handleWallpaperChange = (url: string) => {
         setUser({ ...user, settings: { ...user.settings, wallpaper: url } });
@@ -143,7 +144,7 @@ export const SettingsApp = ({ user, setUser, onDeleteUser }: any) => {
                             <h3 className={`font-bold mb-4 flex items-center gap-2 transition-colors text-slate-900`}><Cpu size={18}/> System Info</h3>
                             <div className="space-y-2 text-sm">
                                 <div className={`flex justify-between border-b pb-1 transition-colors border-slate-100`}>
-                                    <span className="text-slate-500">OS Version</span><span className="text-slate-900">WeberOS 2.0.0</span>
+                                    <span className="text-slate-500">OS Version</span><span className="text-slate-900">WeberOS 2.1.0</span>
                                 </div>
                                 <div className={`flex justify-between border-b pb-1 transition-colors border-slate-100`}>
                                     <span className="text-slate-500">Storage Used</span><span className="text-slate-900">{JSON.stringify(user.fs).length} bytes</span>
@@ -248,6 +249,45 @@ export const SettingsApp = ({ user, setUser, onDeleteUser }: any) => {
                      <div className="max-w-xl">
                          <h3 className={`text-2xl font-bold mb-6 transition-colors text-slate-900`}>Appearance</h3>
                          
+                         <div className={`p-6 rounded-xl border transition-colors bg-white border-slate-200 mb-6`}>
+                             <h4 className={`font-bold mb-4 flex items-center gap-2 transition-colors text-slate-900`}>Custom Wallpaper</h4>
+                             <div className="flex gap-2">
+                                 <input 
+                                     type="text" 
+                                     placeholder="Enter image URL..." 
+                                     value={customWallpaper}
+                                     onChange={(e) => setCustomWallpaper(e.target.value)}
+                                     className="flex-1 border rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500 bg-slate-50 border-slate-300"
+                                 />
+                                 <button 
+                                     onClick={() => {
+                                         if (customWallpaper) {
+                                             handleWallpaperChange(customWallpaper);
+                                             setCustomWallpaper('');
+                                         }
+                                     }}
+                                     className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition"
+                                 >
+                                     Apply
+                                 </button>
+                             </div>
+                         </div>
+
+                         <div className={`p-6 rounded-xl border transition-colors bg-white border-slate-200 mb-6`}>
+                             <h4 className={`font-bold mb-4 flex items-center gap-2 transition-colors text-slate-900`}>Taskbar Style</h4>
+                             <div className="flex gap-4">
+                                 {['default', 'dark', 'glass', 'transparent'].map(style => (
+                                     <button
+                                         key={style}
+                                         onClick={() => setUser({ ...user, settings: { ...user.settings, taskbarStyle: style } })}
+                                         className={`px-4 py-2 rounded-lg capitalize text-sm font-medium border transition ${user.settings.taskbarStyle === style || (!user.settings.taskbarStyle && style === 'default') ? 'bg-blue-50 border-blue-500 text-blue-700' : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'}`}
+                                     >
+                                         {style}
+                                     </button>
+                                 ))}
+                             </div>
+                         </div>
+
                          <h4 className={`font-bold mb-4 flex items-center gap-2 transition-colors text-slate-900`}>Choose Wallpaper</h4>
                          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                              {WALLPAPERS.map((wp, i) => (

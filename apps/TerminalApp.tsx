@@ -9,30 +9,32 @@ interface TerminalAppProps {
     user: UserProfile;
     setUser: (u: UserProfile) => void;
     onNotify?: (appId: string, title: string, message: string) => void;
+    closeWindow?: () => void;
 }
 
-export const TerminalApp = ({ fs, setFs, user, setUser, onNotify }: TerminalAppProps) => {
+export const TerminalApp = ({ fs, setFs, user, setUser, onNotify, closeWindow }: TerminalAppProps) => {
   const [path, setPath] = useState(USER_HOME_PATH);
   const [input, setInput] = useState('');
-  const [history, setHistory] = useState<string[]>(['Welcome to WeberOS Terminal v2.0', 'Type "help" for a list of commands.']);
+  const [history, setHistory] = useState<string[]>(['Welcome to WeberOS Terminal v2.1', 'Type "help" for a list of commands.']);
+  const [textColor, setTextColor] = useState('text-green-400');
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [history]);
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleKeyDown = async (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       const cmd = input.trim();
       // Only show relative path in prompt
       const displayPath = path.length <= USER_HOME_PATH.length ? '~' : '~/' + path.slice(USER_HOME_PATH.length).join('/');
       setHistory(prev => [...prev, `${user.username}@weberos:${displayPath}$ ${input}`]);
-      if (cmd) processCommand(cmd);
+      if (cmd) await processCommand(cmd);
       setInput('');
     }
   };
 
-  const processCommand = (cmdStr: string) => {
+  const processCommand = async (cmdStr: string) => {
     const [cmd, ...args] = cmdStr.split(' ');
     let output: string | null = null;
 
@@ -48,9 +50,45 @@ export const TerminalApp = ({ fs, setFs, user, setUser, onNotify }: TerminalAppP
   mkdir [name]        Create directory
   touch [name]        Create empty file
   rm [name]           Remove file or directory
-  wpm                 Weber Package Manager`;
+  wpm                 Weber Package Manager
+  exit                Close terminal
+  curl [url]          Fetch URL content
+  color [color]       Change text color (e.g. red, blue, green, white)`;
         break;
       case 'clear': setHistory([]); return;
+      case 'exit':
+        if (closeWindow) closeWindow();
+        else output = 'exit: closeWindow not provided';
+        return;
+      case 'color': {
+        const colorArg = args[0]?.toLowerCase();
+        const colorMap: Record<string, string> = {
+            'red': 'text-red-400',
+            'blue': 'text-blue-400',
+            'green': 'text-green-400',
+            'yellow': 'text-yellow-400',
+            'white': 'text-white',
+            'purple': 'text-purple-400',
+            'cyan': 'text-cyan-400',
+        };
+        if (colorArg && colorMap[colorArg]) {
+            setTextColor(colorMap[colorArg]);
+        } else {
+            output = `color: invalid color. Available: ${Object.keys(colorMap).join(', ')}`;
+        }
+        break;
+      }
+      case 'curl': {
+        if (!args[0]) { output = 'curl: missing URL'; break; }
+        try {
+            const res = await fetch(args[0]);
+            const text = await res.text();
+            output = text.slice(0, 1000) + (text.length > 1000 ? '\n... (truncated)' : '');
+        } catch (e: any) {
+            output = `curl: failed to fetch ${args[0]}: ${e.message}`;
+        }
+        break;
+      }
       case 'ls': {
         const target = args[0] || '.';
         const { node } = resolvePath(fs, path, target);
@@ -191,7 +229,7 @@ export const TerminalApp = ({ fs, setFs, user, setUser, onNotify }: TerminalAppP
   const displayPath = path.length <= USER_HOME_PATH.length ? '~' : '~/' + path.slice(USER_HOME_PATH.length).join('/');
 
   return (
-    <div className="bg-black text-green-400 p-2 font-mono h-full text-sm overflow-hidden flex flex-col" onClick={() => document.getElementById('term-input')?.focus()}>
+    <div className={`bg-black ${textColor} p-2 font-mono h-full text-sm overflow-hidden flex flex-col`} onClick={() => document.getElementById('term-input')?.focus()}>
       <div className="flex-1 overflow-y-auto">
         {history.map((line, i) => <div key={i} className="whitespace-pre-wrap mb-1">{line}</div>)}
         <div ref={endRef} />
@@ -200,7 +238,7 @@ export const TerminalApp = ({ fs, setFs, user, setUser, onNotify }: TerminalAppP
         <span className="mr-2 text-blue-400">{user.username}@weberos:{displayPath}$</span>
         <input 
           id="term-input" type="text" value={input} onChange={e => setInput(e.target.value)} onKeyDown={handleKeyDown}
-          className="bg-transparent border-none outline-none flex-1 text-green-400" autoFocus autoComplete="off"
+          className={`bg-transparent border-none outline-none flex-1 ${textColor}`} autoFocus autoComplete="off"
         />
       </div>
     </div>

@@ -61,6 +61,39 @@ export const WeatherApp = ({ user, setUser }: any) => {
         }
     }, [config]);
 
+    const handleSaveConfig = () => {
+        // In a real app, you'd geocode the searchCity here.
+        // For simplicity, we'll just set it to manual mode with dummy coords if they typed something,
+        // or back to auto.
+        const newConfig = searchCity ? { mode: 'manual', city: searchCity, lat: 51.5074, lon: -0.1278 } : { mode: 'auto' };
+        setUser({ ...user, settings: { ...user.settings, weather: newConfig } });
+        setConfigMode(false);
+    };
+
+    if (configMode) {
+        return (
+            <div className={`h-full p-6 flex flex-col items-center justify-center relative transition-colors bg-slate-900 text-white`}>
+                <h2 className="text-2xl font-bold mb-4">Weather Settings</h2>
+                <div className="w-full max-w-xs space-y-4">
+                    <div>
+                        <label className="block text-sm font-medium mb-1">City (Leave blank for Auto)</label>
+                        <input 
+                            type="text" 
+                            value={searchCity} 
+                            onChange={e => setSearchCity(e.target.value)}
+                            placeholder="e.g. London"
+                            className="w-full p-2 rounded bg-slate-800 border border-slate-700 text-white"
+                        />
+                    </div>
+                    <div className="flex gap-2">
+                        <button onClick={() => setConfigMode(false)} className="flex-1 p-2 rounded bg-slate-700 hover:bg-slate-600">Cancel</button>
+                        <button onClick={handleSaveConfig} className="flex-1 p-2 rounded bg-blue-600 hover:bg-blue-500">Save</button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className={`h-full p-6 flex flex-col items-center justify-center relative transition-colors bg-gradient-to-br from-blue-900 to-slate-900 text-white`}>
             <button onClick={() => setConfigMode(true)} className={`absolute top-4 right-4 p-2 rounded-full transition hover:bg-white/20`}><MoreVertical size={20} /></button>

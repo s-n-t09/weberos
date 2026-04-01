@@ -722,9 +722,130 @@ const GuessTheWordGame = () => {
     );
 };
 
+import { Chess } from 'chess.js';
+import { Chessboard } from 'react-chessboard';
+
+// --- Chess Game ---
+const ChessGame = () => {
+    const [game, setGame] = useState(new Chess());
+    const [status, setStatus] = useState('');
+    const [robotMode, setRobotMode] = useState(true);
+    const [lastError, setLastError] = useState('');
+
+    const makeAMove = useCallback((move: any) => {
+        try {
+            const gameCopy = new Chess();
+            gameCopy.loadPgn(game.pgn());
+            
+            let result = null;
+            try {
+                result = gameCopy.move(move);
+            } catch (innerError) {
+                // Ignore and try without promotion below
+            }
+
+            // If the move fails (returns null or throws) and has a promotion, try without it
+            if (!result && move.promotion) {
+                const { promotion, ...moveWithoutPromotion } = move;
+                try {
+                    result = gameCopy.move(moveWithoutPromotion);
+                } catch (e) {
+                    // Ignore
+                }
+            }
+
+            if (!result) {
+                return null; // Invalid move
+            }
+            
+            setGame(gameCopy);
+            setLastError('');
+            return result;
+        } catch (e: any) {
+            console.error("Move error:", e, move);
+            setLastError(`Error: ${e.message} | Move: ${JSON.stringify(move)}`);
+            return null;
+        }
+    }, [game]);
+
+    const makeRandomMove = useCallback(() => {
+        const possibleMoves = game.moves();
+        if (game.isGameOver() || game.isDraw() || possibleMoves.length === 0) return;
+        const randomIndex = Math.floor(Math.random() * possibleMoves.length);
+        
+        try {
+            const gameCopy = new Chess();
+            gameCopy.loadPgn(game.pgn());
+            gameCopy.move(possibleMoves[randomIndex]);
+            setGame(gameCopy);
+        } catch (e) {
+            // ignore
+        }
+    }, [game]);
+
+    const onDrop = (args: any) => {
+        const { sourceSquare, targetSquare, piece } = args;
+        if (!targetSquare) return false;
+        
+        console.log("onDrop called with:", sourceSquare, targetSquare, piece);
+        const move = makeAMove({
+            from: sourceSquare,
+            to: targetSquare,
+            // pieceType is like 'wP', 'bN'
+            promotion: piece?.pieceType?.[1]?.toLowerCase() === 'p' && (targetSquare[1] === '1' || targetSquare[1] === '8') ? 'q' : undefined,
+        });
+
+        // illegal move
+        if (move === null) return false;
+
+        return true;
+    };
+
+    useEffect(() => {
+        if (robotMode && game.turn() === 'b' && !game.isGameOver()) {
+            const timer = setTimeout(makeRandomMove, 300);
+            return () => clearTimeout(timer);
+        }
+    }, [game, robotMode, makeRandomMove]);
+
+    useEffect(() => {
+        if (game.isCheckmate()) {
+            setStatus('Checkmate!');
+        } else if (game.isDraw()) {
+            setStatus('Draw!');
+        } else if (game.isCheck()) {
+            setStatus('Check!');
+        } else {
+            setStatus('');
+        }
+    }, [game]);
+
+    return (
+        <div className="flex flex-col items-center h-full p-4 bg-slate-100 text-slate-800 overflow-y-auto">
+            <div className="mb-6 flex justify-between w-full max-w-md items-center">
+                <h1 className="text-3xl font-bold text-slate-900">Chess</h1>
+                <div className="flex items-center gap-4">
+                    <button 
+                        onClick={() => setRobotMode(!robotMode)} 
+                        className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${robotMode ? 'bg-indigo-600 text-white' : 'bg-slate-300 text-slate-700'}`}
+                    >
+                        {robotMode ? 'Robot: ON' : 'Robot: OFF'}
+                    </button>
+                    <button onClick={() => setGame(new Chess())} className="p-2 bg-slate-600 text-white rounded hover:bg-slate-700"><RefreshCw size={16} /></button>
+                </div>
+            </div>
+            {status && <div className="mb-4 text-xl font-bold text-red-600">{status}</div>}
+            {lastError && <div className="mb-4 p-2 bg-red-100 text-red-700 rounded text-sm max-w-[400px] w-full break-words">{lastError}</div>}
+            <div className="w-full max-w-[400px] shadow-lg rounded-md overflow-hidden">
+                <Chessboard options={{ position: game.fen(), onPieceDrop: onDrop }} />
+            </div>
+        </div>
+    );
+};
+
 // --- Main Games App ---
 export const GamesApp = () => {
-    const [activeGame, setActiveGame] = useState<'Snake' | 'Minesweeper' | '2048' | 'GeometryMatch' | 'GuessTheWord' | null>(null);
+    const [activeGame, setActiveGame] = useState<'Snake' | 'Minesweeper' | '2048' | 'GeometryMatch' | 'GuessTheWord' | 'Chess' | null>(null);
 
     if (activeGame === 'Snake') return (
         <div className="h-full flex flex-col">
@@ -768,6 +889,15 @@ export const GamesApp = () => {
                 <button onClick={() => setActiveGame(null)} className="px-3 py-1 bg-emerald-200 rounded hover:bg-emerald-300 text-sm font-medium text-emerald-900">← Back to Games</button>
             </div>
             <div className="flex-1 overflow-hidden"><GuessTheWordGame /></div>
+        </div>
+    );
+
+    if (activeGame === 'Chess') return (
+        <div className="h-full flex flex-col">
+            <div className="bg-slate-100 text-slate-800 p-2 flex items-center gap-2 border-b border-slate-200">
+                <button onClick={() => setActiveGame(null)} className="px-3 py-1 bg-slate-200 rounded hover:bg-slate-300 text-sm font-medium text-slate-900">← Back to Games</button>
+            </div>
+            <div className="flex-1 overflow-hidden"><ChessGame /></div>
         </div>
     );
 
@@ -840,6 +970,18 @@ export const GamesApp = () => {
                         </div>
                         <h2 className="text-xl font-bold text-slate-900 mb-2">Guess the Word</h2>
                         <p className="text-slate-500 text-sm">Answer easy global trivia questions and guess the correct word to win.</p>
+                    </button>
+
+                    {/* Chess Card */}
+                    <button 
+                        onClick={() => setActiveGame('Chess')}
+                        className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 hover:shadow-md hover:border-indigo-300 transition-all text-left group"
+                    >
+                        <div className="w-12 h-12 bg-slate-100 text-slate-600 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                            <LucideIcons.Crown size={24} />
+                        </div>
+                        <h2 className="text-xl font-bold text-slate-900 mb-2">Chess</h2>
+                        <p className="text-slate-500 text-sm">Play a classic game of Chess against the computer.</p>
                     </button>
                 </div>
             </div>

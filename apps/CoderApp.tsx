@@ -1,8 +1,32 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Plus, Save, FileCode, ChevronDown, ChevronRight, FilePlus, Bot, Send, Settings, X, FileText } from 'lucide-react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { Plus, Save, FileCode, ChevronDown, ChevronRight, FilePlus, Bot, Send, Settings, X, FileText, Code } from 'lucide-react';
+import * as LucideIcons from 'lucide-react';
 import { resolvePath } from '../utils/fs';
 import { USER_HOME_PATH } from '../utils/constants';
 import { osAlert, osPrompt } from '../components/DialogHost';
+
+class ErrorBoundary extends React.Component<{children: React.ReactNode, key?: any}, {hasError: boolean, error: any}> {
+    state = { hasError: false, error: null };
+    constructor(props: {children: React.ReactNode, key?: any}) {
+        super(props);
+    }
+    static getDerivedStateFromError(error: any) {
+        return { hasError: true, error };
+    }
+    componentDidCatch(error: any, errorInfo: any) {
+        console.error("Preview Error:", error, errorInfo);
+    }
+    render() {
+        if (this.state.hasError) {
+            return (
+                <div className="text-red-500 p-4 font-mono break-words">
+                    {this.state.error?.toString()}
+                </div>
+            );
+        }
+        return (this as any).props.children;
+    }
+}
 
 const FileTreeNode = ({ name, node, path, onSelect, currentFile }: any) => {
     const [expanded, setExpanded] = useState(false);
@@ -55,11 +79,16 @@ export const CoderApp = ({ fs, setFs, launchData }: any) => {
     const [content, setContent] = useState('');
     const [status, setStatus] = useState('Welcome to Coder');
     const [suggestion, setSuggestion] = useState<string | null>(null);
+    const [appTab, setAppTab] = useState<'editor' | 'weber'>('editor');
+    const [weberCode, setWeberCode] = useState("return () => React.createElement('div', {className: 'h-full flex items-center justify-center bg-purple-600 text-white text-2xl font-bold'}, 'Hello World!')");
+    const [showWeberModal, setShowWeberModal] = useState(false);
+    const [showPreview, setShowPreview] = useState(true);
+    const [weberAppInfo, setWeberAppInfo] = useState({ name: 'My App', id: 'my-app', version: '1.0.0', icon: 'Box', permissions: '' });
     
     // WeGroq State
     const [isGroqOpen, setIsGroqOpen] = useState(false);
     const [groqKey, setGroqKey] = useState(() => localStorage.getItem('wegroq_key') || '');
-    const [groqModel, setGroqModel] = useState(() => localStorage.getItem('wegroq_model') || 'Ilama-3.3-70b-versatile');
+    const [groqModel, setGroqModel] = useState(() => localStorage.getItem('wegroq_model') || 'openai/gpt-oss-120b');
     const [groqMessages, setGroqMessages] = useState<{role: string, content: string}[]>([]);
     const [groqInput, setGroqInput] = useState('');
     const [isGroqLoading, setIsGroqLoading] = useState(false);
@@ -67,7 +96,7 @@ export const CoderApp = ({ fs, setFs, launchData }: any) => {
     const chatEndRef = useRef<HTMLDivElement>(null);
 
     const GROQ_MODELS = [
-        "open/gpt-oss-120b",
+        "openai/gpt-oss-120b",
         "openai/gpt-oss-20b",
         "openai/gpt-oss-safeguard-20b",
         "whisper-large-v3-turbo",
@@ -97,6 +126,26 @@ export const CoderApp = ({ fs, setFs, launchData }: any) => {
     for(const p of USER_HOME_PATH) {
         if(userDir.children) userDir = userDir.children[p];
     }
+
+    useEffect(() => {
+        if (currentFile && currentFile.endsWith('.wbr')) {
+            try {
+                const parsed = JSON.parse(content);
+                if (parsed.code) {
+                    setWeberCode(Array.isArray(parsed.code) ? parsed.code.join('\n') : parsed.code);
+                }
+                setWeberAppInfo({
+                    name: parsed.name || 'My App',
+                    id: parsed.id || 'my-app',
+                    version: parsed.version || '1.0.0',
+                    icon: parsed.icon || 'Box',
+                    permissions: (parsed.permissions || []).join(', ')
+                });
+            } catch (e) {
+                // Not valid JSON yet, ignore
+            }
+        }
+    }, [content, currentFile]);
 
     const handleFileSelect = (pathStr: string) => {
         const fullPath = [...USER_HOME_PATH, ...pathStr.split('/')].join('/');
@@ -149,27 +198,6 @@ export const CoderApp = ({ fs, setFs, launchData }: any) => {
         }
     };
 
-    const handleInsertTemplate = () => {
-        if (!currentFile || !currentFile.endsWith('.wbr')) {
-            osAlert("Please open or create a .wbr file first.");
-            return;
-        }
-        const name = currentFile.split('/').pop() || 'app';
-        const initialContent = JSON.stringify({
-            id: name.replace('.wbr', ''),
-            name: name.replace('.wbr', ''),
-            icon: "Box",
-            permissions: [],
-            code: [
-                "return function App({ onNotify, fs }) {",
-                "  return React.createElement('div', { className: 'p-4 text-white' }, 'Hello World');",
-                "}"
-            ]
-        }, null, 2);
-        setContent(initialContent);
-        setStatus("Inserted .wbr template");
-    };
-
     const handleSave = () => {
         if (!currentFile) {
             handleNew(); // Fallback to create logic
@@ -213,6 +241,74 @@ export const CoderApp = ({ fs, setFs, launchData }: any) => {
         }
     };
 
+    const handleWeberSave = async () => {
+        setShowWeberModal(false);
+        try {
+            const wbrContent = JSON.stringify({
+                id: weberAppInfo.id,
+                name: weberAppInfo.name,
+                version: weberAppInfo.version,
+                icon: weberAppInfo.icon,
+                permissions: weberAppInfo.permissions.split(',').map(p => p.trim()).filter(p => p),
+                code: weberCode.split('\n')
+            }, null, 2);
+            
+            // If we have a current file, save there, else create new
+            if (currentFile) {
+                let fullPathStr = currentFile;
+                if (!currentFile.startsWith('home/')) {
+                    fullPathStr = [...USER_HOME_PATH, ...currentFile.split('/')].join('/');
+                }
+                const { node } = resolvePath(fs, [], fullPathStr);
+                if (node && node.type === 'file') {
+                    node.content = wbrContent;
+                    setFs({ ...fs });
+                    setContent(wbrContent);
+                    setStatus(`Saved: ${currentFile}`);
+                }
+            } else {
+                let parent = fs;
+                for(const p of USER_HOME_PATH) {
+                    if(parent.children) parent = parent.children[p];
+                }
+                if (parent.children) {
+                    const filename = weberAppInfo.id + '.wbr';
+                    parent.children[filename] = { type: 'file', content: wbrContent };
+                    setFs({ ...fs });
+                    setCurrentFile(filename);
+                    setContent(wbrContent);
+                    setStatus(`Created: ${filename}`);
+                }
+            }
+        } catch (e: any) {
+            osAlert(e.toString());
+        }
+    };
+
+    const Preview = useMemo(() => {
+        try {
+            // Provide a mock Sys for the preview to prevent crashing if it tries to use it
+            const mockSys = {
+                notify: (t: string, m: string) => console.log('Preview Notify:', t, m),
+                fs: {
+                    readFile: () => 'mock data',
+                    writeFile: () => {},
+                    openFilePicker: async () => null,
+                    openFileSaver: async () => null
+                },
+                requestCamera: async () => { throw new Error('Camera not available in preview'); },
+                requestMic: async () => { throw new Error('Mic not available in preview'); },
+                getLocation: async () => { throw new Error('Geolocation not available in preview'); }
+            };
+            const fn = new Function('React', 'LucideIcons', 'Sys', weberCode);
+            const res = fn(React, LucideIcons, mockSys);
+            if (typeof res === 'function') return res;
+            return () => res;
+        } catch (e: any) {
+            return () => <div className="text-red-500 p-4 font-mono">{e.toString()}</div>;
+        }
+    }, [weberCode]);
+
     const handleGroqSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!groqInput.trim() || !groqKey) {
@@ -228,7 +324,21 @@ export const CoderApp = ({ fs, setFs, launchData }: any) => {
         try {
             const systemPrompt = `You are WeGroq, an AI coding assistant integrated directly into the 'Coder' app of WeberOS.
 WeberOS is a web-based operating system simulator running in the browser.
-The Coder app allows users to write code, specifically Weber Runtime (.wbr) apps.
+The user is currently in the ${appTab === 'weber' ? '"Weber Coder" tab, editing only the JavaScript code of the app.' : '"Code Editor" tab, editing the raw file content.'}
+
+${appTab === 'weber' ? `You are helping the user write the React component for their app.
+The code must be a valid JavaScript function returning a React component.
+Example:
+return function MyApp({ onNotify, fs }) {
+  return React.createElement('div', { className: 'p-4 text-white' }, 'Hello World');
+}
+
+To update the user's code in the editor, output exactly this format anywhere in your response:
+\`\`\`weber-code
+your react code here
+\`\`\`
+The current JavaScript code is:
+${weberCode}` : `The Coder app allows users to write code, specifically Weber Runtime (.wbr) apps.
 A .wbr app is a JSON file containing metadata and a React component.
 The "code" field can be a single string or an array of strings (which is preferred for multi-line code).
 Example .wbr structure:
@@ -243,14 +353,7 @@ Example .wbr structure:
     "}"
   ]
 }
-Available permissions:
-- "notifications": Allows sending OS notifications via \`onNotify(appId, title, message)\` or \`Sys.notify(title, message)\`.
-- "fs": Allows reading/writing files via \`Sys.fs.readFile(path)\`, \`Sys.fs.writeFile(path, content)\`, \`Sys.fs.openFilePicker()\`, \`Sys.fs.openFileSaver()\`.
-- "camera": Allows requesting camera via \`Sys.requestCamera()\`.
-- "microphone": Allows requesting microphone via \`Sys.requestMic()\`.
-- "geolocation": Allows getting location via \`Sys.getLocation()\`.
 
-You can help the user write code, debug, or explain concepts.
 You have the ability to create or modify files in the user's filesystem by outputting a special JSON block.
 To write a file, output exactly this format anywhere in your response:
 \`\`\`file-write
@@ -261,7 +364,16 @@ To write a file, output exactly this format anywhere in your response:
 \`\`\`
 The user's current file is: ${currentFile || 'None'}
 The current file content is:
-${content}
+${content}`}
+
+Available permissions and APIs (passed as props or via Sys object):
+- "notifications": Allows sending OS notifications via \`onNotify(appId, title, message)\` or \`Sys.notify(title, message)\`.
+- "fs": Allows reading/writing files via \`Sys.fs.readFile(path)\`, \`Sys.fs.writeFile(path, content)\`, \`Sys.fs.openFilePicker()\`, \`Sys.fs.openFileSaver()\`.
+- "camera": Allows requesting camera via \`Sys.requestCamera()\`.
+- "microphone": Allows requesting microphone via \`Sys.requestMic()\`.
+- "geolocation": Allows getting location via \`Sys.getLocation()\`.
+
+You can help the user write code, debug, or explain concepts.
 `;
 
             const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -288,6 +400,14 @@ ${content}
             const aiResponse = data.choices[0].message.content;
             
             setGroqMessages(prev => [...prev, { role: 'assistant', content: aiResponse }]);
+
+            // Parse for weber-code
+            const weberCodeRegex = /\`\`\`weber-code\n([\s\S]*?)\n\`\`\`/g;
+            let weberMatch;
+            while ((weberMatch = weberCodeRegex.exec(aiResponse)) !== null) {
+                setWeberCode(weberMatch[1]);
+                setStatus(`WeGroq updated the code.`);
+            }
 
             // Parse for file writes
             const fileWriteRegex = /\`\`\`file-write\n([\s\S]*?)\n\`\`\`/g;
@@ -346,49 +466,87 @@ ${content}
             
             {/* Main Area */}
             <div className="flex-1 flex flex-col min-w-0">
-                 <div className="flex bg-[#2d2d2d] p-2 gap-2 text-xs border-b border-[#3e3e42] items-center">
-                    <span className="font-bold text-blue-400">{currentFile ? currentFile.split('/').pop() : 'Untitled'}</span>
-                    <div className="flex-1"></div>
-                    <span className="text-gray-500 mr-2">{status}</span>
-                    <button onClick={handleInsertTemplate} className="hover:bg-[#3e3e42] bg-[#2d2d2d] border border-[#3e3e42] text-gray-300 px-3 py-1 rounded flex items-center gap-1 transition">
-                        <FileText size={12} /> Use .wbr Template
-                    </button>
-                    <button onClick={() => setIsGroqOpen(!isGroqOpen)} className={`hover:bg-[#3e3e42] ${isGroqOpen ? 'bg-[#0e639c]' : 'bg-[#2d2d2d] border border-[#3e3e42]'} text-white px-3 py-1 rounded flex items-center gap-1 transition`}>
-                        <Bot size={12} /> WeGroq
-                    </button>
-                    <button onClick={handleSave} className="hover:bg-[#3e3e42] bg-[#0e639c] text-white px-3 py-1 rounded flex items-center gap-1 transition">
-                        <Save size={12} /> Save
-                    </button>
+                <div className="flex bg-[#252526] border-b border-[#3e3e42] text-xs">
+                    <button className={`px-4 py-2 ${appTab === 'editor' ? 'bg-[#1e1e1e] border-t-2 border-blue-500 text-white' : 'text-gray-400 hover:text-white'}`} onClick={() => setAppTab('editor')}>Code Editor</button>
+                    <button className={`px-4 py-2 ${appTab === 'weber' ? 'bg-[#1e1e1e] border-t-2 border-blue-500 text-white' : 'text-gray-400 hover:text-white'}`} onClick={() => setAppTab('weber')}>Weber Coder</button>
                 </div>
                 
-                <div className="flex-1 flex overflow-hidden relative">
-                    {/* Line Numbers */}
-                    <div className="bg-[#1e1e1e] text-[#858585] p-4 text-right select-none border-r border-[#3e3e42] min-w-[3rem]">
-                        {lines.map((_, i) => (
-                            <div key={i} className="leading-6 h-6">{i + 1}</div>
-                        ))}
-                    </div>
-                    {/* Editor */}
-                    <div className="flex-1 relative">
-                        <textarea 
-                            className="w-full h-full bg-[#1e1e1e] text-[#d4d4d4] p-4 outline-none resize-none leading-6 whitespace-pre tab-4"
-                            value={content}
-                            onChange={handleContentChange}
-                            onKeyDown={handleKeyDown}
-                            spellCheck={false}
-                            wrap="off"
-                        />
-                        {suggestion && (
-                             <div className="absolute bottom-4 right-4 bg-blue-900/80 text-white px-2 py-1 rounded text-xs animate-pulse">
-                                 Press TAB to insert: <strong>{suggestion}</strong>
-                             </div>
-                        )}
-                    </div>
-                </div>
+                {appTab === 'editor' ? (
+                    <>
+                        <div className="flex bg-[#2d2d2d] p-2 gap-2 text-xs border-b border-[#3e3e42] items-center">
+                            <span className="font-bold text-blue-400">{currentFile ? currentFile.split('/').pop() : 'Untitled'}</span>
+                            <div className="flex-1"></div>
+                            <span className="text-gray-500 mr-2">{status}</span>
+                            <button onClick={handleSave} className="hover:bg-[#3e3e42] bg-[#0e639c] text-white px-3 py-1 rounded flex items-center gap-1 transition">
+                                <Save size={12} /> Save
+                            </button>
+                        </div>
+                        
+                        <div className="flex-1 flex overflow-hidden relative">
+                            {/* Line Numbers */}
+                            <div className="bg-[#1e1e1e] text-[#858585] p-4 text-right select-none border-r border-[#3e3e42] min-w-[3rem]">
+                                {lines.map((_, i) => (
+                                    <div key={i} className="leading-6 h-6">{i + 1}</div>
+                                ))}
+                            </div>
+                            {/* Editor */}
+                            <div className="flex-1 relative">
+                                <textarea 
+                                    className="w-full h-full bg-[#1e1e1e] text-[#d4d4d4] p-4 outline-none resize-none leading-6 whitespace-pre tab-4"
+                                    value={content}
+                                    onChange={handleContentChange}
+                                    onKeyDown={handleKeyDown}
+                                    spellCheck={false}
+                                    wrap="off"
+                                />
+                                {suggestion && (
+                                     <div className="absolute bottom-4 right-4 bg-blue-900/80 text-white px-2 py-1 rounded text-xs animate-pulse">
+                                         Press TAB to insert: <strong>{suggestion}</strong>
+                                     </div>
+                                )}
+                            </div>
+                        </div>
+                    </>
+                ) : (
+                    <>
+                        <div className="flex bg-[#2d2d2d] p-2 gap-2 text-xs border-b border-[#3e3e42] items-center">
+                            <span className="font-bold text-blue-400">{currentFile ? currentFile.split('/').pop() : 'New App'}</span>
+                            <div className="flex-1"></div>
+                            <span className="text-gray-500 mr-2">{status}</span>
+                            <button onClick={() => setShowPreview(!showPreview)} className={`hover:bg-[#3e3e42] ${showPreview ? 'bg-[#0e639c]' : 'bg-[#2d2d2d] border border-[#3e3e42]'} text-white px-3 py-1 rounded flex items-center gap-1 transition`}>
+                                <FileText size={12} /> Preview
+                            </button>
+                            <button onClick={() => setIsGroqOpen(!isGroqOpen)} className={`hover:bg-[#3e3e42] ${isGroqOpen ? 'bg-[#0e639c]' : 'bg-[#2d2d2d] border border-[#3e3e42]'} text-white px-3 py-1 rounded flex items-center gap-1 transition`}>
+                                <Bot size={12} /> WeGroq
+                            </button>
+                            <button onClick={() => setShowWeberModal(true)} className="hover:bg-[#3e3e42] bg-[#0e639c] text-white px-3 py-1 rounded flex items-center gap-1 transition">
+                                <Save size={12} /> Save App
+                            </button>
+                        </div>
+                        <div className="flex-1 flex overflow-hidden">
+                            <div className={`${showPreview ? 'w-1/2 border-r' : 'w-full'} h-full border-[#3e3e42]`}>
+                                <textarea 
+                                    className="w-full h-full bg-[#1e1e1e] text-[#4ade80] p-4 outline-none resize-none leading-6 whitespace-pre tab-4"
+                                    value={weberCode}
+                                    onChange={e => setWeberCode(e.target.value)}
+                                    spellCheck={false}
+                                    wrap="off"
+                                />
+                            </div>
+                            {showPreview && (
+                                <div className="w-1/2 h-full bg-white text-black relative overflow-auto">
+                                    <ErrorBoundary key={weberCode}>
+                                        <Preview />
+                                    </ErrorBoundary>
+                                </div>
+                            )}
+                        </div>
+                    </>
+                )}
             </div>
 
             {/* WeGroq Sidebar */}
-            {isGroqOpen && (
+            {isGroqOpen && appTab === 'weber' && (
                 <div className="w-80 bg-[#252526] border-l border-[#3e3e42] flex flex-col">
                     <div className="p-3 border-b border-[#3e3e42] flex justify-between items-center bg-[#2d2d2d]">
                         <div className="flex items-center gap-2 font-bold text-blue-400">
@@ -479,6 +637,38 @@ ${content}
                             </div>
                         </>
                     )}
+                </div>
+            )}
+
+            {showWeberModal && (
+                <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-50">
+                    <div className="bg-[#252526] p-6 rounded-xl w-96 text-white flex flex-col gap-4 shadow-2xl border border-[#3e3e42]">
+                        <h2 className="text-xl font-bold text-blue-400">Save App Configuration</h2>
+                        <div className="flex flex-col gap-1">
+                            <label className="text-xs text-gray-400">App Name</label>
+                            <input className="bg-[#1e1e1e] border border-[#3e3e42] p-2 rounded outline-none focus:border-blue-500" value={weberAppInfo.name} onChange={e => setWeberAppInfo({...weberAppInfo, name: e.target.value})} />
+                        </div>
+                        <div className="flex flex-col gap-1">
+                            <label className="text-xs text-gray-400">App ID</label>
+                            <input className="bg-[#1e1e1e] border border-[#3e3e42] p-2 rounded outline-none focus:border-blue-500" value={weberAppInfo.id} onChange={e => setWeberAppInfo({...weberAppInfo, id: e.target.value})} />
+                        </div>
+                        <div className="flex flex-col gap-1">
+                            <label className="text-xs text-gray-400">Version</label>
+                            <input className="bg-[#1e1e1e] border border-[#3e3e42] p-2 rounded outline-none focus:border-blue-500" value={weberAppInfo.version} onChange={e => setWeberAppInfo({...weberAppInfo, version: e.target.value})} />
+                        </div>
+                        <div className="flex flex-col gap-1">
+                            <label className="text-xs text-gray-400">Icon (Lucide Icon Name)</label>
+                            <input className="bg-[#1e1e1e] border border-[#3e3e42] p-2 rounded outline-none focus:border-blue-500" value={weberAppInfo.icon} onChange={e => setWeberAppInfo({...weberAppInfo, icon: e.target.value})} />
+                        </div>
+                        <div className="flex flex-col gap-1">
+                            <label className="text-xs text-gray-400">Permissions (comma separated)</label>
+                            <input className="bg-[#1e1e1e] border border-[#3e3e42] p-2 rounded outline-none focus:border-blue-500" placeholder="fs, notifications" value={weberAppInfo.permissions} onChange={e => setWeberAppInfo({...weberAppInfo, permissions: e.target.value})} />
+                        </div>
+                        <div className="flex justify-end gap-2 mt-2">
+                            <button className="px-4 py-2 bg-[#3e3e42] hover:bg-[#2d2d2d] rounded" onClick={() => setShowWeberModal(false)}>Cancel</button>
+                            <button className="px-4 py-2 bg-[#0e639c] hover:bg-blue-500 rounded font-bold" onClick={handleWeberSave}>Save</button>
+                        </div>
+                    </div>
                 </div>
             )}
         </div>

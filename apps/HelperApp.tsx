@@ -20,7 +20,7 @@ const PRO_TIPS = [
     "Notifications keep you updated on system events.",
     "The FileSystem API allows apps to read and write files.",
     "You can set default apps for specific file extensions in Settings.",
-    "Use the 'Use .wbr Template' button in Coder to start quickly.",
+    "Use the 'Weber Coder' tab in Coder to start building apps quickly.",
     "WeberOS 2 brings a fresh new UI and improved performance."
 ];
 
