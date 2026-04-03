@@ -1,6 +1,371 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Gamepad2, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, RefreshCw, Flag, Bomb } from 'lucide-react';
+import { Gamepad2, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, RefreshCw, Flag, Bomb, Settings } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
+
+// --- Solitaire Game ---
+type Suit = 'hearts' | 'diamonds' | 'clubs' | 'spades';
+type Rank = 'A' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | '10' | 'J' | 'Q' | 'K';
+
+interface Card {
+  id: string;
+  suit: Suit;
+  rank: Rank;
+  color: 'red' | 'black';
+  value: number;
+  faceUp: boolean;
+}
+
+const SUITS: Suit[] = ['hearts', 'diamonds', 'clubs', 'spades'];
+const RANKS: Rank[] = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
+
+const createDeck = (): Card[] => {
+  const deck: Card[] = [];
+  for (const suit of SUITS) {
+    for (let i = 0; i < RANKS.length; i++) {
+      deck.push({
+        id: `${suit}-${RANKS[i]}`,
+        suit,
+        rank: RANKS[i],
+        color: suit === 'hearts' || suit === 'diamonds' ? 'red' : 'black',
+        value: i + 1,
+        faceUp: false,
+      });
+    }
+  }
+  return deck.sort(() => Math.random() - 0.5);
+};
+
+interface GameState {
+  stock: Card[];
+  waste: Card[];
+  foundations: { [key in Suit]: Card[] };
+  tableau: Card[][];
+}
+
+const SolitaireGame = () => {
+  const [gameState, setGameState] = useState<GameState | null>(null);
+  const [drawCount, setDrawCount] = useState<1 | 3>(1);
+  const [autoPlay, setAutoPlay] = useState<boolean>(true);
+  const [showSettings, setShowSettings] = useState(false);
+  const [selectedCard, setSelectedCard] = useState<{ source: string, index: number, card: Card } | null>(null);
+
+  const initGame = () => {
+    const deck = createDeck();
+    const tableau: Card[][] = Array.from({ length: 7 }, () => []);
+    
+    for (let i = 0; i < 7; i++) {
+      for (let j = i; j < 7; j++) {
+        const card = deck.pop()!;
+        if (i === j) card.faceUp = true;
+        tableau[j].push(card);
+      }
+    }
+
+    setGameState({
+      stock: deck,
+      waste: [],
+      foundations: { hearts: [], diamonds: [], clubs: [], spades: [] },
+      tableau,
+    });
+    setSelectedCard(null);
+  };
+
+  useEffect(() => {
+    initGame();
+  }, []);
+
+  const handleStockClick = () => {
+    if (!gameState) return;
+    const newState = { ...gameState };
+    
+    if (newState.stock.length === 0) {
+      if (newState.waste.length === 0) return;
+      newState.stock = [...newState.waste].reverse().map(c => ({ ...c, faceUp: false }));
+      newState.waste = [];
+    } else {
+      const drawn = newState.stock.splice(-drawCount, drawCount).reverse().map(c => ({ ...c, faceUp: true }));
+      newState.waste = [...newState.waste, ...drawn];
+    }
+    
+    setGameState(newState);
+    setSelectedCard(null);
+  };
+
+  const canMoveToFoundation = (card: Card, foundation: Card[]) => {
+    if (foundation.length === 0) return card.value === 1;
+    const topCard = foundation[foundation.length - 1];
+    return topCard.suit === card.suit && topCard.value === card.value - 1;
+  };
+
+  const canMoveToTableau = (card: Card, column: Card[]) => {
+    if (column.length === 0) return card.value === 13; // Only King on empty
+    const topCard = column[column.length - 1];
+    return topCard.color !== card.color && topCard.value === card.value + 1;
+  };
+
+  const handleCardClick = (source: string, index: number, card: Card) => {
+    if (!gameState) return;
+    
+    if (!card.faceUp && source.startsWith('tableau')) {
+      // Only allow flipping the top card of a tableau column
+      const colIndex = parseInt(source.split('-')[1]);
+      if (index === gameState.tableau[colIndex].length - 1) {
+        const newState = { ...gameState };
+        newState.tableau[colIndex][index].faceUp = true;
+        setGameState(newState);
+      }
+      return;
+    }
+
+    if (!selectedCard) {
+      if (!card.faceUp) return;
+      setSelectedCard({ source, index, card });
+    } else {
+      // Attempt to move
+      const newState = { ...gameState };
+      let moved = false;
+
+      if (source.startsWith('foundation')) {
+        const suit = source.split('-')[1] as Suit;
+        if (selectedCard.index === getSourceArray(newState, selectedCard.source).length - 1 && canMoveToFoundation(selectedCard.card, newState.foundations[suit])) {
+          newState.foundations[suit].push(selectedCard.card);
+          removeCardFromSource(newState, selectedCard.source, selectedCard.index);
+          moved = true;
+        }
+      } else if (source.startsWith('tableau')) {
+        const colIndex = parseInt(source.split('-')[1]);
+        if (canMoveToTableau(selectedCard.card, newState.tableau[colIndex])) {
+          const sourceArr = getSourceArray(newState, selectedCard.source);
+          if (selectedCard.source === 'waste' && selectedCard.index !== sourceArr.length - 1) {
+             // Cannot move non-top card from waste
+          } else if (selectedCard.source.startsWith('foundation') && selectedCard.index !== sourceArr.length - 1) {
+             // Cannot move non-top card from foundation
+          } else {
+            const movingCards = sourceArr.splice(selectedCard.index);
+            newState.tableau[colIndex].push(...movingCards);
+            moved = true;
+          }
+        }
+      }
+
+      if (moved) {
+        setGameState(newState);
+      }
+      setSelectedCard(null);
+    }
+  };
+
+  const handleEmptyTableauClick = (colIndex: number) => {
+    if (!gameState || !selectedCard) return;
+    if (selectedCard.card.value === 13) { // King
+      const newState = { ...gameState };
+      const sourceArr = getSourceArray(newState, selectedCard.source);
+      
+      if (selectedCard.source === 'waste' && selectedCard.index !== sourceArr.length - 1) {
+        // Cannot move non-top card from waste
+      } else if (selectedCard.source.startsWith('foundation') && selectedCard.index !== sourceArr.length - 1) {
+        // Cannot move non-top card from foundation
+      } else {
+        const movingCards = sourceArr.splice(selectedCard.index);
+        newState.tableau[colIndex].push(...movingCards);
+        setGameState(newState);
+      }
+    }
+    setSelectedCard(null);
+  };
+
+  const handleEmptyFoundationClick = (suit: Suit) => {
+    if (!gameState || !selectedCard) return;
+    if (selectedCard.index === getSourceArray(gameState, selectedCard.source).length - 1 && selectedCard.card.value === 1 && selectedCard.card.suit === suit) {
+      const newState = { ...gameState };
+      newState.foundations[suit].push(selectedCard.card);
+      removeCardFromSource(newState, selectedCard.source, selectedCard.index);
+      setGameState(newState);
+    }
+    setSelectedCard(null);
+  };
+
+  const getSourceArray = (state: GameState, source: string): Card[] => {
+    if (source === 'waste') return state.waste;
+    if (source.startsWith('tableau')) return state.tableau[parseInt(source.split('-')[1])];
+    if (source.startsWith('foundation')) return state.foundations[source.split('-')[1] as Suit];
+    return [];
+  };
+
+  const removeCardFromSource = (state: GameState, source: string, index: number) => {
+    if (source === 'waste') state.waste.splice(index, 1);
+    else if (source.startsWith('tableau')) state.tableau[parseInt(source.split('-')[1])].splice(index, 1);
+    else if (source.startsWith('foundation')) state.foundations[source.split('-')[1] as Suit].splice(index, 1);
+  };
+
+  // Auto-play logic
+  useEffect(() => {
+    if (!gameState || !autoPlay) return;
+    
+    let moved = false;
+    const newState = { ...gameState };
+
+    const tryMoveToFoundation = (card: Card, source: string, index: number) => {
+      if (canMoveToFoundation(card, newState.foundations[card.suit])) {
+        newState.foundations[card.suit].push(card);
+        removeCardFromSource(newState, source, index);
+        moved = true;
+        return true;
+      }
+      return false;
+    };
+
+    // Check waste
+    if (newState.waste.length > 0) {
+      const card = newState.waste[newState.waste.length - 1];
+      tryMoveToFoundation(card, 'waste', newState.waste.length - 1);
+    }
+
+    // Check tableau
+    if (!moved) {
+      for (let i = 0; i < 7; i++) {
+        const col = newState.tableau[i];
+        if (col.length > 0) {
+          const card = col[col.length - 1];
+          if (card.faceUp && tryMoveToFoundation(card, `tableau-${i}`, col.length - 1)) {
+            break;
+          }
+        }
+      }
+    }
+
+    if (moved) {
+      setTimeout(() => setGameState(newState), 300);
+    }
+  }, [gameState, autoPlay]);
+
+  if (!gameState) return null;
+
+  const renderCard = (card: Card, source: string, index: number, isStack: boolean = false) => {
+    const isSelected = selectedCard?.card.id === card.id;
+    return (
+      <div
+        key={card.id}
+        onClick={(e) => { e.stopPropagation(); handleCardClick(source, index, card); }}
+        className={`w-16 h-24 rounded-lg border-2 flex flex-col items-center justify-center bg-white cursor-pointer select-none
+          ${isSelected ? 'border-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.5)]' : 'border-slate-300 shadow-sm'}
+          ${!card.faceUp ? 'bg-blue-800 border-white/20 bg-[url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4IiBoZWlnaHQ9IjgiPgo8cmVjdCB3aWR0aD0iOCIgaGVpZ2h0PSI4IiBmaWxsPSIjMWU0MGFmIj48L3JlY3Q+CjxwYXRoIGQ9Ik0wIDBMOCA4Wk04IDBMMCA4WiIgc3Ryb2tlPSIjMWQ0ZWQ4IiBzdHJva2Utd2lkdGg9IjEiPjwvcGF0aD4KPC9zdmc+")]' : ''}
+          ${isStack ? 'absolute top-0 left-0' : ''}
+        `}
+        style={isStack ? { top: `${index * 20}px`, zIndex: index } : {}}
+      >
+        {card.faceUp && (
+          <div className={`text-xl font-bold ${card.color === 'red' ? 'text-red-600' : 'text-slate-900'}`}>
+            <div className="text-sm absolute top-1 left-1">{card.rank}</div>
+            <div>{card.suit === 'hearts' ? '♥' : card.suit === 'diamonds' ? '♦' : card.suit === 'clubs' ? '♣' : '♠'}</div>
+            <div className="text-sm absolute bottom-1 right-1 rotate-180">{card.rank}</div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div className="flex flex-col h-full bg-green-900 text-white p-4 overflow-auto" onClick={() => setSelectedCard(null)}>
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-2xl font-bold">Solitaire</h2>
+        <div className="flex gap-2">
+          <button onClick={() => setShowSettings(!showSettings)} className="p-2 bg-green-800 rounded hover:bg-green-700">
+            <Settings size={20} />
+          </button>
+          <button onClick={initGame} className="p-2 bg-green-800 rounded hover:bg-green-700">
+            <RefreshCw size={20} />
+          </button>
+        </div>
+      </div>
+
+      {showSettings && (
+        <div className="mb-6 p-4 bg-green-800 rounded-xl border border-green-700 flex gap-6 items-center">
+          <div>
+            <label className="block text-sm mb-1 text-green-200">Draw Count</label>
+            <select 
+              value={drawCount} 
+              onChange={(e) => { setDrawCount(Number(e.target.value) as 1 | 3); initGame(); }}
+              className="bg-green-900 border border-green-600 rounded p-1 text-white"
+            >
+              <option value={1}>Draw 1</option>
+              <option value={3}>Draw 3</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm mb-1 text-green-200">Auto-Play to Foundation</label>
+            <button 
+              onClick={() => setAutoPlay(!autoPlay)}
+              className={`px-3 py-1 rounded ${autoPlay ? 'bg-blue-600' : 'bg-slate-600'}`}
+            >
+              {autoPlay ? 'Enabled' : 'Disabled'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="flex justify-between mb-8 min-w-[600px]">
+        {/* Top Left: Stock and Waste */}
+        <div className="flex gap-4">
+          <div 
+            className="w-16 h-24 rounded-lg border-2 border-green-700 bg-green-800 flex items-center justify-center cursor-pointer hover:bg-green-700"
+            onClick={(e) => { e.stopPropagation(); handleStockClick(); }}
+          >
+            {gameState.stock.length > 0 ? (
+              <div className="w-full h-full rounded-md bg-blue-800 border-white/20 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4IiBoZWlnaHQ9IjgiPgo8cmVjdCB3aWR0aD0iOCIgaGVpZ2h0PSI4IiBmaWxsPSIjMWU0MGFmIj48L3JlY3Q+CjxwYXRoIGQ9Ik0wIDBMOCA4Wk04IDBMMCA4WiIgc3Ryb2tlPSIjMWQ0ZWQ4IiBzdHJva2Utd2lkdGg9IjEiPjwvcGF0aD4KPC9zdmc+')]"></div>
+            ) : (
+              <RefreshCw size={24} className="text-green-600" />
+            )}
+          </div>
+          <div className="w-16 h-24 relative">
+            {gameState.waste.slice(-3).map((card, i, arr) => (
+              <div key={card.id} className="absolute top-0" style={{ left: `${i * 15}px`, zIndex: i }}>
+                {renderCard(card, 'waste', gameState.waste.length - arr.length + i)}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Top Right: Foundations */}
+        <div className="flex gap-4">
+          {SUITS.map((suit) => (
+            <div 
+              key={suit} 
+              className="w-16 h-24 rounded-lg border-2 border-green-700 bg-green-800 flex items-center justify-center relative cursor-pointer"
+              onClick={(e) => { e.stopPropagation(); handleEmptyFoundationClick(suit); }}
+            >
+              <div className="text-3xl opacity-20 text-green-900">
+                {suit === 'hearts' ? '♥' : suit === 'diamonds' ? '♦' : suit === 'clubs' ? '♣' : '♠'}
+              </div>
+              {gameState.foundations[suit].length > 0 && (
+                <div className="absolute inset-0">
+                  {renderCard(gameState.foundations[suit][gameState.foundations[suit].length - 1], `foundation-${suit}`, gameState.foundations[suit].length - 1)}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Bottom: Tableau */}
+      <div className="flex gap-4 min-w-[600px] flex-1">
+        {gameState.tableau.map((col, i) => (
+          <div 
+            key={i} 
+            className="w-16 relative flex-1 min-h-[100px]"
+            onClick={(e) => { e.stopPropagation(); if (col.length === 0) handleEmptyTableauClick(i); }}
+          >
+            {col.length === 0 ? (
+              <div className="w-16 h-24 rounded-lg border-2 border-green-700 bg-green-800"></div>
+            ) : (
+              col.map((card, j) => renderCard(card, `tableau-${i}`, j, true))
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
 
 // --- Snake Game ---
 const SnakeGame = () => {
@@ -901,6 +1266,15 @@ export const GamesApp = () => {
         </div>
     );
 
+    if (activeGame === 'Solitaire') return (
+        <div className="h-full flex flex-col">
+            <div className="bg-slate-100 text-slate-800 p-2 flex items-center gap-2 border-b border-slate-200">
+                <button onClick={() => setActiveGame(null)} className="px-3 py-1 bg-slate-200 rounded hover:bg-slate-300 text-sm font-medium text-slate-900">← Back to Games</button>
+            </div>
+            <div className="flex-1 overflow-hidden"><SolitaireGame /></div>
+        </div>
+    );
+
     return (
         <div className="h-full bg-slate-50 p-8 overflow-y-auto">
             <div className="max-w-4xl mx-auto">
@@ -982,6 +1356,18 @@ export const GamesApp = () => {
                         </div>
                         <h2 className="text-xl font-bold text-slate-900 mb-2">Chess</h2>
                         <p className="text-slate-500 text-sm">Play a classic game of Chess against the computer.</p>
+                    </button>
+
+                    {/* Solitaire Card */}
+                    <button 
+                        onClick={() => setActiveGame('Solitaire')}
+                        className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 hover:shadow-md hover:border-indigo-300 transition-all text-left group"
+                    >
+                        <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                            <LucideIcons.Spade size={24} />
+                        </div>
+                        <h2 className="text-xl font-bold text-slate-900 mb-2">Solitaire</h2>
+                        <p className="text-slate-500 text-sm">The classic card game of Klondike Solitaire. Draw 1 or Draw 3 options available.</p>
                     </button>
                 </div>
             </div>

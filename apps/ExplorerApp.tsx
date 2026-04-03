@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowUp, FilePlus, Plus, Copy, Scissors, Clipboard, Trash2, Folder, FileText } from 'lucide-react';
+import { ArrowUp, FilePlus, Plus, Copy, Scissors, Clipboard, Trash2, Folder, FileText, Edit2, LinkIcon } from 'lucide-react';
 import { FileSystemNode, UserProfile } from '../types';
 import { getDirContents, deepClone } from '../utils/fs';
 import { USER_HOME_PATH } from '../utils/constants';
@@ -10,17 +10,18 @@ interface ExplorerAppProps {
     fs: FileSystemNode;
     setFs: (fs: FileSystemNode) => void;
     user: UserProfile;
+    setUser?: (user: UserProfile) => void;
     mode?: 'normal' | 'picker' | 'saver';
     onPick?: (path: string) => void;
     onOpen?: (path: string) => void;
     onOpenWith?: (path: string) => void;
 }
 
-export const ExplorerApp = ({ fs, setFs, user, mode = 'normal', onPick, onOpen, onOpenWith }: ExplorerAppProps) => {
+export const ExplorerApp = ({ fs, setFs, user, setUser, mode = 'normal', onPick, onOpen, onOpenWith }: ExplorerAppProps) => {
     const [path, setPath] = useState(USER_HOME_PATH);
     const [selected, setSelected] = useState<string | null>(null);
     const [clipboard, setClipboard] = useState<{ type: 'copy' | 'cut', path: string[], node: FileSystemNode } | null>(null);
-    const [contextMenu, setContextMenu] = useState<{x: number, y: number, file: string} | null>(null);
+    const [contextMenu, setContextMenu] = useState<{x: number, y: number, file: string, type: 'dir' | 'file'} | null>(null);
     const [saveFileName, setSaveFileName] = useState<string>('');
 
     const dirContents = getDirContents(fs, path) || {};
@@ -180,12 +181,54 @@ export const ExplorerApp = ({ fs, setFs, user, mode = 'normal', onPick, onOpen, 
         }
     };
 
-    const handleContextMenu = (e: React.MouseEvent, name: string, type: 'dir' | 'file') => {
+    const handleRename = async () => {
+        if (!selected) return;
+        const newName = await osPrompt(`Enter new name for ${selected}:`, selected);
+        if (!newName || newName === selected) return;
+        
+        let parent = fs;
+        for (const p of path) {
+            if (parent.children) parent = parent.children[p];
+        }
+        
+        if (parent.children) {
+            if (parent.children[newName]) {
+                await osAlert("An item with that name already exists!");
+            } else {
+                parent.children[newName] = parent.children[selected];
+                delete parent.children[selected];
+                setFs({ ...fs });
+                setSelected(newName);
+            }
+        }
+    };
+
+    const handleShortcut = () => {
+        if (!selected || !setUser) return;
+        const type = dirContents[selected].type;
+        const newShortcut = {
+            id: 'shortcut_' + Date.now(),
+            name: selected,
+            path: [...path, selected].join('/'),
+            type: type
+        };
+        setUser({
+            ...user,
+            settings: {
+                ...user.settings,
+                shortcuts: [...(user.settings.shortcuts || []), newShortcut]
+            }
+        });
+    };
+
+    const handleContextMenu = (e: React.MouseEvent | React.TouchEvent, name: string, type: 'dir' | 'file') => {
         e.preventDefault();
         e.stopPropagation();
         setSelected(name);
-        if (type === 'file' && mode === 'normal') {
-            setContextMenu({ x: e.clientX, y: e.clientY, file: name });
+        if (mode === 'normal') {
+            const clientX = 'touches' in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
+            const clientY = 'touches' in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
+            setContextMenu({ x: clientX, y: clientY, file: name, type });
         }
     };
 
@@ -213,6 +256,7 @@ export const ExplorerApp = ({ fs, setFs, user, mode = 'normal', onPick, onOpen, 
                 <div className="h-4 w-px bg-slate-400 mx-1"></div>
                 
                 <button onClick={handleDelete} disabled={!selected} className="p-1.5 rounded hover:bg-red-200 text-red-600 disabled:opacity-30" title="Delete"><Trash2 size={16}/></button>
+                <button onClick={handleRename} disabled={!selected} className="p-1.5 rounded hover:bg-slate-300 text-slate-700 disabled:opacity-30" title="Rename"><Edit2 size={16}/></button>
 
                 {mode === 'picker' && (
                     <>
@@ -248,6 +292,21 @@ export const ExplorerApp = ({ fs, setFs, user, mode = 'normal', onPick, onOpen, 
                         onClick={(e) => { e.stopPropagation(); closeContextMenu(); setSelected(name); }}
                         onDoubleClick={() => handleNavigate(name, node.type)}
                         onContextMenu={(e) => handleContextMenu(e, name, node.type)}
+                        onTouchStart={(e) => {
+                            // Basic long press detection
+                            const timer = setTimeout(() => {
+                                handleContextMenu(e, name, node.type);
+                            }, 500);
+                            e.currentTarget.dataset.timer = timer.toString();
+                        }}
+                        onTouchEnd={(e) => {
+                            const timer = e.currentTarget.dataset.timer;
+                            if (timer) clearTimeout(parseInt(timer));
+                        }}
+                        onTouchMove={(e) => {
+                            const timer = e.currentTarget.dataset.timer;
+                            if (timer) clearTimeout(parseInt(timer));
+                        }}
                         className={`flex flex-col items-center gap-1 group cursor-pointer p-2 rounded transition border ${selected === name ? 'bg-blue-200 border-blue-300' : 'hover:bg-slate-200 border-transparent'} ${clipboard?.path.includes(name) && clipboard.path.join('/') === [...path, name].join('/') && clipboard.type === 'cut' ? 'opacity-50' : ''}`}
                     >
                         <div className={`w-12 h-12 flex items-center justify-center ${node.type === 'dir' ? 'text-yellow-500' : 'text-slate-500'}`}>
@@ -296,13 +355,17 @@ export const ExplorerApp = ({ fs, setFs, user, mode = 'normal', onPick, onOpen, 
                     <button 
                         className="w-full text-left px-4 py-2 text-sm hover:bg-blue-50 text-slate-700"
                         onClick={() => {
-                            if (onOpen) onOpen([...path, contextMenu.file].join('/'));
+                            if (contextMenu.type === 'dir') {
+                                handleNavigate(contextMenu.file, 'dir');
+                            } else if (onOpen) {
+                                onOpen([...path, contextMenu.file].join('/'));
+                            }
                             closeContextMenu();
                         }}
                     >
                         Open
                     </button>
-                    {onOpenWith && (
+                    {contextMenu.type === 'file' && onOpenWith && (
                         <button 
                             className="w-full text-left px-4 py-2 text-sm hover:bg-blue-50 text-slate-700"
                             onClick={() => {
@@ -331,6 +394,24 @@ export const ExplorerApp = ({ fs, setFs, user, mode = 'normal', onPick, onOpen, 
                         }}
                     >
                         Cut
+                    </button>
+                    <button 
+                        className="w-full text-left px-4 py-2 text-sm hover:bg-blue-50 text-slate-700"
+                        onClick={() => {
+                            handleRename();
+                            closeContextMenu();
+                        }}
+                    >
+                        Rename
+                    </button>
+                    <button 
+                        className="w-full text-left px-4 py-2 text-sm hover:bg-blue-50 text-slate-700"
+                        onClick={() => {
+                            handleShortcut();
+                            closeContextMenu();
+                        }}
+                    >
+                        Shortcut to desktop
                     </button>
                     <button 
                         className="w-full text-left px-4 py-2 text-sm hover:bg-red-50 text-red-600"

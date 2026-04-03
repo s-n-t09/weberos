@@ -15,7 +15,7 @@ interface TerminalAppProps {
 export const TerminalApp = ({ fs, setFs, user, setUser, onNotify, closeWindow }: TerminalAppProps) => {
   const [path, setPath] = useState(USER_HOME_PATH);
   const [input, setInput] = useState('');
-  const [history, setHistory] = useState<string[]>(['Welcome to WeberOS Terminal v2.1', 'Type "help" for a list of commands.']);
+  const [history, setHistory] = useState<string[]>(['Welcome to WeberOS Terminal v2.2', 'Type "help" for a list of commands.']);
   const [textColor, setTextColor] = useState('text-green-400');
   const endRef = useRef<HTMLDivElement>(null);
 
