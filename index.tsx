@@ -864,7 +864,7 @@ const WeberOS = () => {
       setShortcutPath('');
   };
 
-  return (
+    return (
     <div className={`h-screen w-screen overflow-hidden relative font-sans select-none`}
         style={{
             backgroundImage: `url("${user.settings.wallpaper}")`,
@@ -873,10 +873,6 @@ const WeberOS = () => {
             transition: 'background-image 0.5s ease-in-out'
         }}
         onClick={() => { setShowVolumePopup(false); setShowNotifPanel(false); setStartOpen(false); setStartSearchQuery(''); setContextMenu(null); }}
-        onContextMenu={handleDesktopContextMenu}
-        onTouchStart={handleDesktopTouchStart}
-        onTouchEnd={handleDesktopTouchEnd}
-        onTouchMove={handleDesktopTouchEnd}
     >
         <input type="file" id="hidden-file-input" onChange={handleFileUpload} className="hidden" />
 
@@ -989,7 +985,13 @@ const WeberOS = () => {
 
         {/* Desktop Icons */}
         <div className="absolute inset-0 pointer-events-none overflow-hidden h-[calc(100%-80px)]">
-            <div className="relative w-full h-full pointer-events-auto">
+            <div 
+                className="relative w-full h-full pointer-events-auto"
+                onContextMenu={handleDesktopContextMenu}
+                onTouchStart={handleDesktopTouchStart}
+                onTouchEnd={handleDesktopTouchEnd}
+                onTouchMove={handleDesktopTouchEnd}
+            >
                 {(() => {
                     const rowHeight = 112; // 96 + 16
                     const colWidth = 96; // 80 + 16
@@ -1130,6 +1132,7 @@ const WeberOS = () => {
                 fs={fs} 
                 setFs={setFs} 
                 user={user} 
+                setUser={setUser}
                 mode={win.data?.mode} 
                 onPick={(path: string) => { 
                     if(win.data?.onPickCallback) win.data.onPickCallback(path); 
