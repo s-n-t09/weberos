@@ -3,7 +3,7 @@
   <a href="https://github.com/s-n-t09/weberos">
     <img src="/logo.png" alt="WeberOS Logo" width="125" height="125">
   </a>
-  <h1 align="center">WeberOS v2.2</h1>
+  <h1 align="center">WeberOS v2.3</h1>
 
   <p align="center">
     <strong>Next-Gen Web-Based Operating System Simulator</strong>
@@ -186,9 +186,9 @@ To publish your app to the WeberOS Market:
 
 ---
 
-## 🛡️ API Permissions (v2.2)
+## 🛡️ API Permissions (v2.3)
 
-In version 2.2, you can request system permissions in your `.wbr` manifest to access advanced features.
+In version 2.3, you can request system permissions in your `.wbr` manifest to access advanced features.
 
 | Permission | Description | API Access |
 | :--- | :--- | :--- |
