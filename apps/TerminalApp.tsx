@@ -10,12 +10,14 @@ interface TerminalAppProps {
     setUser: (u: UserProfile) => void;
     onNotify?: (appId: string, title: string, message: string) => void;
     closeWindow?: () => void;
+    openApp?: (appId: string) => void;
+    appIds?: string[];
 }
 
-export const TerminalApp = ({ fs, setFs, user, setUser, onNotify, closeWindow }: TerminalAppProps) => {
+export const TerminalApp = ({ fs, setFs, user, setUser, onNotify, closeWindow, openApp, appIds = [] }: TerminalAppProps) => {
   const [path, setPath] = useState(USER_HOME_PATH);
   const [input, setInput] = useState('');
-  const [history, setHistory] = useState<string[]>(['Welcome to WeberOS Terminal v2.2', 'Type "help" for a list of commands.']);
+  const [history, setHistory] = useState<string[]>(['Welcome to WeberOS Terminal', 'Type "help" for a list of commands.']);
   const [textColor, setTextColor] = useState('text-green-400');
   const endRef = useRef<HTMLDivElement>(null);
 
@@ -53,7 +55,8 @@ export const TerminalApp = ({ fs, setFs, user, setUser, onNotify, closeWindow }:
   wpm                 Weber Package Manager
   exit                Close terminal
   curl [url]          Fetch URL content
-  color [color]       Change text color (e.g. red, blue, green, white)`;
+  color [color]       Change text color (e.g. red, blue, green, white)
+You can also type any installed App ID (e.g. explorer, coder) to launch it.`;
         break;
       case 'clear': setHistory([]); return;
       case 'exit':
@@ -221,7 +224,13 @@ export const TerminalApp = ({ fs, setFs, user, setUser, onNotify, closeWindow }:
         }
         break;
       }
-      default: output = `${cmd}: command not found`;
+      default: {
+        if (appIds.includes(cmd)) {
+          if (openApp) openApp(cmd);
+        } else {
+          output = `${cmd}: command not found`;
+        }
+      }
     }
     if (output) setHistory(prev => [...prev, output as string]);
   };
