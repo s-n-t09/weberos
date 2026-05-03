@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createRoot } from 'react-dom/client';
 import * as LucideIcons from 'lucide-react';
 import { 
@@ -32,7 +32,8 @@ import {
     RefreshCw,
     Settings,
     Maximize,
-    Link as LinkIcon
+    Link as LinkIcon,
+    Activity
 } from 'lucide-react';
 
 import { UserProfile, WindowState, FileSystemNode, SystemNotification } from './types';
@@ -57,6 +58,7 @@ import { CalcoApp, WeatherApp, DynamicAppRuntime } from './apps/MiscApps';
 import { GamesApp } from './apps/GamesApp';
 import { InstallerApp } from './apps/InstallerApp';
 import { NotifTesterApp } from './apps/NotifTesterApp';
+import { TaskManagerApp } from './apps/TaskManagerApp';
 
 // Registry
 const SYSTEM_REGISTRY: Record<string, { name: string, icon: any, color: string }> = {
@@ -74,6 +76,7 @@ const SYSTEM_REGISTRY: Record<string, { name: string, icon: any, color: string }
   'weplayer': { name: 'WePlayer', icon: Film, color: 'bg-rose-600' },
   'installer': { name: 'Program Installer', icon: Package, color: 'bg-indigo-500' },
   'notiftester': { name: 'Notif Tester', icon: Bell, color: 'bg-amber-500' },
+  'taskmanager': { name: 'Task Manager', icon: Activity, color: 'bg-emerald-500' },
 };
 
 const PRO_TIPS = [
@@ -485,13 +488,13 @@ const WeberOS = () => {
     setWindows(windows.map(w => w.id === id ? { ...w, isMaximized: !w.isMaximized } : w));
   };
 
-  const moveWindow = (id: string, x: number, y: number) => {
-    setWindows(windows.map(w => w.id === id ? { ...w, position: { x, y } } : w));
-  };
+  const moveWindow = useCallback((id: string, x: number, y: number) => {
+    setWindows(prev => prev.map(w => w.id === id ? { ...w, position: { x, y } } : w));
+  }, []);
 
-  const resizeWindow = (id: string, w: number, h: number) => {
-    setWindows(windows.map(win => win.id === id ? { ...win, size: { w, h } } : win));
-  };
+  const resizeWindow = useCallback((id: string, w: number, h: number) => {
+    setWindows(prev => prev.map(win => win.id === id ? { ...win, size: { w, h } } : win));
+  }, []);
 
   const availableApps = [
       ...DEFAULT_APPS.map(id => ({ id, ...SYSTEM_REGISTRY[id] })),
@@ -905,6 +908,15 @@ const WeberOS = () => {
                     className="w-full text-left px-4 py-2 text-sm text-slate-200 hover:bg-white/10 transition flex items-center gap-2"
                     onClick={() => {
                         setContextMenu(null);
+                        openApp('taskmanager');
+                    }}
+                >
+                    <Activity size={14} /> Task Manager
+                </button>
+                <button 
+                    className="w-full text-left px-4 py-2 text-sm text-slate-200 hover:bg-white/10 transition flex items-center gap-2"
+                    onClick={() => {
+                        setContextMenu(null);
                         if (!document.fullscreenElement) {
                             document.documentElement.requestFullscreen().catch(() => {});
                         } else {
@@ -1114,6 +1126,17 @@ const WeberOS = () => {
                                     }
                                 }}
                                 onMove={handleDesktopIconMove}
+                                onDelete={() => {
+                                    if (user) {
+                                        setUser({
+                                            ...user,
+                                            settings: {
+                                                ...user.settings,
+                                                shortcuts: user.settings.shortcuts?.filter(s => s.id !== sc.id)
+                                            }
+                                        });
+                                    }
+                                }}
                             />
                         );
                     });
@@ -1126,7 +1149,7 @@ const WeberOS = () => {
         {/* Windows */}
         {windows.map(win => {
             let AppContent;
-            if (win.appId === 'terminal') AppContent = <TerminalApp fs={fs} setFs={setFs} user={user} setUser={setUser} onNotify={sendNotification} closeWindow={() => closeWindow(win.id)} />;
+            if (win.appId === 'terminal') AppContent = <TerminalApp fs={fs} setFs={setFs} user={user} setUser={setUser} onNotify={sendNotification} closeWindow={() => closeWindow(win.id)} openApp={openApp} appIds={availableApps.map(a => a.id)} />;
             else if (win.appId === 'coder') AppContent = <CoderApp fs={fs} setFs={setFs} launchData={win.data} />;
             else if (win.appId === 'explorer') AppContent = <ExplorerApp 
                 fs={fs} 
@@ -1148,6 +1171,7 @@ const WeberOS = () => {
             else if (win.appId === 'weather') AppContent = <WeatherApp user={user} setUser={setUser} />;
             else if (win.appId === 'settings') AppContent = <SettingsApp user={user} setUser={setUser} onDeleteUser={deleteUser} />;
             else if (win.appId === 'market') AppContent = <MarketApp user={user} setUser={setUser} onNotify={sendNotification} />;
+            else if (win.appId === 'taskmanager') AppContent = <TaskManagerApp windows={windows} closeWindow={closeWindow} />;
             else if (win.appId === 'helper') AppContent = <HelperApp />;
             else if (win.appId === 'wepic') AppContent = <WePicApp fs={fs} launchData={win.data} openFilePicker={openFilePicker} />;
             else if (win.appId === 'weplayer') AppContent = <WePlayerApp fs={fs} launchData={win.data} openFilePicker={openFilePicker} volume={volume} />;
