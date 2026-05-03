@@ -12,7 +12,7 @@ export const DEFAULT_FS: FileSystemNode = {
         user: {
           type: 'dir',
           children: {
-            'readme.txt': { type: 'file', content: 'Welcome to WeberOS 2.3!\n\nThis is a fully functional web-based OS.\nTry the new WireBox Browser!' },
+            'readme.txt': { type: 'file', content: 'Welcome to WeberOS!\n\nThis is a fully functional web-based OS.\nTry the new WireBox Browser!' },
             'todo.txt': { type: 'file', content: '- Try WireBox\n- Check Notifications\n- Write a .wbr app with permissions' },
             'hello.wbr': { 
                 type: 'file', 
