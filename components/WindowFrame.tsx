@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Minus, Square, X } from 'lucide-react';
 import { WindowState } from '../types';
 
@@ -45,6 +45,14 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ win, isActive, onClose
     setStartResize({ w: win.size.w, h: win.size.h, x: clientX, y: clientY });
   };
 
+  const onMoveRef = useRef(onMove);
+  const onResizeRef = useRef(onResize);
+
+  useEffect(() => {
+      onMoveRef.current = onMove;
+      onResizeRef.current = onResize;
+  }, [onMove, onResize]);
+
   useEffect(() => {
     const handleGlobalMove = (e: MouseEvent | TouchEvent) => {
       if (!isDragging && !isResizing) return;
@@ -53,9 +61,9 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ win, isActive, onClose
       const clientY = 'touches' in e ? e.touches[0].clientY : (e as MouseEvent).clientY;
 
       if (isDragging) {
-        onMove(clientX - dragOffset.x, clientY - dragOffset.y);
+        onMoveRef.current(clientX - dragOffset.x, clientY - dragOffset.y);
       } else if (isResizing) {
-        onResize(Math.max(300, startResize.w + (clientX - startResize.x)), Math.max(200, startResize.h + (clientY - startResize.y)));
+        onResizeRef.current(Math.max(300, startResize.w + (clientX - startResize.x)), Math.max(200, startResize.h + (clientY - startResize.y)));
       }
     };
 
@@ -72,7 +80,7 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ win, isActive, onClose
       window.removeEventListener('mouseup', handleGlobalUp);
       window.removeEventListener('touchend', handleGlobalUp);
     };
-  }, [isDragging, isResizing, dragOffset, startResize, onMove, onResize]);
+  }, [isDragging, isResizing, dragOffset, startResize]);
 
   // FIX: Do not return null here. Return a hidden div to keep component mounted and preserve state (like audio playing).
   const displayStyle = win.isMinimized ? 'none' : 'flex';

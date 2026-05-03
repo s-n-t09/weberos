@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { X } from 'lucide-react';
 
 interface DesktopIconProps {
     id: string;
@@ -10,9 +11,10 @@ interface DesktopIconProps {
     savedPosition?: { x: number, y: number };
     onDoubleClick: () => void;
     onMove: (id: string, x: number, y: number) => void;
+    onDelete?: () => void;
 }
 
-export const DesktopIcon: React.FC<DesktopIconProps> = ({ id, name, icon: Icon, color, initialX, initialY, savedPosition, onDoubleClick, onMove }) => {
+export const DesktopIcon: React.FC<DesktopIconProps> = ({ id, name, icon: Icon, color, initialX, initialY, savedPosition, onDoubleClick, onMove, onDelete }) => {
     const [position, setPosition] = useState(savedPosition || { x: initialX, y: initialY });
     const [isDragging, setIsDragging] = useState(false);
     const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
@@ -28,6 +30,9 @@ export const DesktopIcon: React.FC<DesktopIconProps> = ({ id, name, icon: Icon, 
     }, [savedPosition, initialX, initialY, isDragging]);
 
     const handlePointerDown = (e: React.PointerEvent) => {
+        // Stop if clicking the delete button
+        if ((e.target as HTMLElement).closest('.delete-btn')) return;
+
         e.stopPropagation();
         (e.target as HTMLElement).setPointerCapture(e.pointerId);
         setIsDragging(true);
@@ -75,6 +80,17 @@ export const DesktopIcon: React.FC<DesktopIconProps> = ({ id, name, icon: Icon, 
             onClick={handleClick}
             onDoubleClick={onDoubleClick}
         >
+            {onDelete && (
+                <button
+                    className="delete-btn absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10 hover:bg-red-600 shadow-md"
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onDelete();
+                    }}
+                >
+                    <X size={12} strokeWidth={3} />
+                </button>
+            )}
             <div className={`w-12 h-12 ${color} rounded-2xl shadow-lg flex items-center justify-center group-hover:scale-105 transition-transform pointer-events-none`}>
                 <Icon size={24} />
             </div>
