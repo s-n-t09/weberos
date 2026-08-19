@@ -1488,9 +1488,78 @@ const ChessGame = () => {
     );
 };
 
+// --- Memory Lights Game ---
+const MemoryLightsGame = () => {
+    const [sequence, setSequence] = useState<number[]>([]);
+    const [playerSequence, setPlayerSequence] = useState<number[]>([]);
+    const [lit, setLit] = useState<number | null>(null);
+    const [status, setStatus] = useState('Press Start to begin');
+    const [score, setScore] = useState(0);
+    const [isPlaying, setIsPlaying] = useState(false);
+
+    const playSequence = async (nextSequence: number[]) => {
+        setIsPlaying(true);
+        setPlayerSequence([]);
+        setStatus('Watch the pattern...');
+        for (const tile of nextSequence) {
+            await new Promise(resolve => setTimeout(resolve, 280));
+            setLit(tile);
+            await new Promise(resolve => setTimeout(resolve, 420));
+            setLit(null);
+        }
+        setIsPlaying(false);
+        setStatus('Your turn');
+    };
+
+    const start = () => {
+        const next = [Math.floor(Math.random() * 9)];
+        setSequence(next);
+        setScore(0);
+        playSequence(next);
+    };
+
+    const choose = (tile: number) => {
+        if (isPlaying || !sequence.length) return;
+        const nextPlayer = [...playerSequence, tile];
+        setPlayerSequence(nextPlayer);
+        setLit(tile);
+        setTimeout(() => setLit(null), 160);
+        const index = nextPlayer.length - 1;
+        if (tile !== sequence[index]) {
+            setStatus(`Game over — score ${score}. Press Start to try again.`);
+            setSequence([]);
+            setPlayerSequence([]);
+            return;
+        }
+        if (nextPlayer.length === sequence.length) {
+            const nextScore = score + 1;
+            const nextSequence = [...sequence, Math.floor(Math.random() * 9)];
+            setScore(nextScore);
+            setSequence(nextSequence);
+            setTimeout(() => playSequence(nextSequence), 500);
+        }
+    };
+
+    return React.createElement('div', {className: 'h-full flex flex-col items-center justify-center gap-5 bg-slate-950 text-white p-6'},
+        React.createElement('div', {className: 'text-center'},
+            React.createElement('h2', {className: 'text-3xl font-black text-cyan-300'}, 'Memory Lights'),
+            React.createElement('p', {className: 'text-slate-400 mt-1'}, status),
+            React.createElement('p', {className: 'text-sm text-slate-500 mt-2'}, `Round: ${score}`)),
+        React.createElement('div', {className: 'grid grid-cols-3 gap-3'},
+            Array.from({length: 9}, (_, tile) => React.createElement('button', {
+                key: tile,
+                'aria-label': `Light ${tile + 1}`,
+                onClick: () => choose(tile),
+                className: `w-20 h-20 sm:w-24 sm:h-24 rounded-2xl transition-all ${lit === tile ? 'bg-cyan-300 shadow-[0_0_30px_#67e8f9] scale-105' : ['bg-indigo-700', 'bg-fuchsia-700', 'bg-blue-700'][tile % 3]} hover:brightness-125`
+            }))),
+        React.createElement('button', {onClick: start, className: 'px-8 py-3 rounded-xl bg-cyan-500 text-slate-950 font-bold hover:bg-cyan-300'}, 'Start / Restart'),
+        React.createElement('p', {className: 'text-xs text-slate-500 max-w-sm text-center'}, 'Watch the lights, then repeat the exact sequence. Each successful round adds another light.')
+    );
+};
+
 // --- Main Games App ---
 export const GamesApp = () => {
-    const [activeGame, setActiveGame] = useState<'Snake' | 'Minesweeper' | '2048' | 'GeometryMatch' | 'GuessTheWord' | 'Chess' | null>(null);
+    const [activeGame, setActiveGame] = useState<'Snake' | 'Minesweeper' | '2048' | 'GeometryMatch' | 'GuessTheWord' | 'Chess' | 'Solitaire' | 'BreakABrick' | 'MemoryLights' | null>(null);
 
     if (activeGame === 'Snake') return (
         <div className="h-full flex flex-col">
@@ -1561,6 +1630,15 @@ export const GamesApp = () => {
                 <button onClick={() => setActiveGame(null)} className="px-3 py-1 bg-slate-800 rounded hover:bg-slate-700 text-sm font-medium text-slate-200">← Back to Games</button>
             </div>
             <div className="flex-1 overflow-hidden"><BreakABrickGame /></div>
+        </div>
+    );
+
+    if (activeGame === 'MemoryLights') return (
+        <div className="h-full flex flex-col">
+            <div className="bg-slate-950 text-white p-2 flex items-center gap-2 border-b border-cyan-900">
+                <button onClick={() => setActiveGame(null)} className="px-3 py-1 bg-slate-800 rounded hover:bg-slate-700 text-sm font-medium text-slate-200">← Back to Games</button>
+            </div>
+            <div className="flex-1 overflow-hidden"><MemoryLightsGame /></div>
         </div>
     );
 
@@ -1669,6 +1747,18 @@ export const GamesApp = () => {
                         </div>
                         <h2 className="text-xl font-bold text-slate-900 mb-2">Break a Brick</h2>
                         <p className="text-slate-500 text-sm">Destroy all the bricks with the bouncing ball. Move the paddle with keys or finger.</p>
+                    </button>
+
+                    {/* Memory Lights Card */}
+                    <button
+                        onClick={() => setActiveGame('MemoryLights')}
+                        className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 hover:shadow-md hover:border-cyan-300 transition-all text-left group"
+                    >
+                        <div className="w-12 h-12 bg-cyan-100 text-cyan-600 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                            <LucideIcons.Lightbulb size={24} />
+                        </div>
+                        <h2 className="text-xl font-bold text-slate-900 mb-2">Memory Lights</h2>
+                        <p className="text-slate-500 text-sm">Watch the pattern, repeat it, and see how many rounds your memory can survive.</p>
                     </button>
                 </div>
             </div>

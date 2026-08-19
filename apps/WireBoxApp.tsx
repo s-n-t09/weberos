@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { ArrowLeft, ArrowRight, RotateCcw, Search, Plus, X, Globe, Settings, Download, Shield, ExternalLink, Home, Menu, Terminal, Video, FileText, Palette } from 'lucide-react';
 import { UserProfile, FileSystemNode } from '../types';
 import { osConfirm } from '../components/DialogHost';
+import { fetchRemotePage } from '../utils/corsProxy';
 
 interface Tab {
     id: string;
@@ -53,7 +54,8 @@ export const WireBoxApp = ({ user, setUser, openApp }: { user: UserProfile, setU
             customizerConfig: {
                 barColor: '#ffffff',
                 homeBgColor: '#f8fafc'
-            }
+            },
+            proxyUrl: ''
         };
     });
 
@@ -116,18 +118,12 @@ export const WireBoxApp = ({ user, setUser, openApp }: { user: UserProfile, setU
 
         if (tab.proxyMode && finalUrl.startsWith('http')) {
              try {
-                let content = '';
-                try {
-                    const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(finalUrl)}`);
-                    const data = await res.json();
-                    if (data.contents) content = data.contents;
-                    else throw new Error('No contents');
-                } catch (e) {
-                    const res = await fetch(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(finalUrl)}`);
-                    content = await res.text();
-                }
-                
+                let { content, provider, isDocument } = await fetchRemotePage(finalUrl, undefined, browserSettings.proxyUrl);
                 if (content) {
+                     if (!isDocument) {
+                         updateTab(targetTabId, { loading: false, title: `${displayTitle} (${provider})`, srcDoc: `<pre style="white-space:pre-wrap;padding:2rem;font-family:system-ui;">${content.replace(/[&<>]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[char] || char))}</pre>` });
+                         return;
+                     }
                      const baseTag = `<base href="${finalUrl}" target="_self" />`;
                      
                      if (content.match(/<head>/i)) {
@@ -569,6 +565,16 @@ export const WireBoxApp = ({ user, setUser, openApp }: { user: UserProfile, setU
                                                 <option value="Google">Google</option>
                                                 <option value="Bing">Bing</option>
                                             </select>
+                                        </div>
+                                        <div className="mb-4">
+                                            <label className="text-sm font-medium text-slate-700 block mb-1">Custom CORS Proxy (optional)</label>
+                                            <input
+                                                value={browserSettings.proxyUrl || ''}
+                                                onChange={e => setBrowserSettings(s => ({ ...s, proxyUrl: e.target.value }))}
+                                                placeholder="https://your-proxy.example/relay"
+                                                className="w-full p-2 border border-slate-200 rounded-lg bg-slate-50 text-sm outline-none focus:border-blue-500"
+                                            />
+                                            <p className="text-xs text-slate-500 mt-1">The proxy must accept ?url= and return the remote page. WireBox falls back to public routes when empty.</p>
                                         </div>
                                     </div>
                                 </div>

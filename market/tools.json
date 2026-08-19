@@ -7,5 +7,25 @@
   "description": "Sticky notes with a color of classic paper",
   "location": "market/apps/notesplus.wbr",
   "permissions": []
+ },
+ {
+  "id": "wetimer",
+  "name": "WeTimer",
+  "icon": "Timer",
+  "author": "S.N.T",
+  "description": "A focused Pomodoro timer for productive sessions",
+  "version": "1.0.0",
+  "location": "market/apps/wetimer.wbr",
+  "permissions": ["notifications"]
+ },
+ {
+  "id": "wecolorpalette",
+  "name": "WeColor Palette",
+  "icon": "Palette",
+  "author": "S.N.T",
+  "description": "Pick, preview, and copy beautiful HEX colors",
+  "version": "1.0.0",
+  "location": "market/apps/wecolorpalette.wbr",
+  "permissions": []
  }
 ]

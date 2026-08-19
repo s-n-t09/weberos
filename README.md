@@ -132,10 +132,12 @@ npm run preview
 | **Market** | 🛍️ | App store to discover and install new packages. |
 | **WePlayer** | 🎬 | Video and Music player with simple style and timestamp control. |
 | **WePic** | 🖼️ | Image viewer for standard image formats. |
-| **Games** | 🎮 | Collection of games including Snake, Geometry Match, and Guess the Word. |
+| **Games** | 🎮 | Collection of games including Snake, Geometry Match, Guess the Word, and Memory Lights. |
 | **Notif Tester** | 🔔 | Test in-OS notifications and generate .wbr code snippets. |
 | **Calco** | 🧮 | Basic arithmetic calculator. |
 | **Weather** | ☁️ | Real-time weather updates (requires location access). |
+| **WeTimer** | ⏱️ | Pomodoro-style focus timer available from the Market. |
+| **WeColor Palette** | 🎨 | HEX color picker and clipboard helper available from the Market. |
 
 ---
 
@@ -211,6 +213,10 @@ You can request system permissions in your `.wbr` manifest to access advanced fe
 ```
 
 ---
+
+## 🌐 WireBox CORS Proxy
+
+WireBox first attempts a direct request, then tries the configured custom proxy, followed by public fallback routes. For reliable production use, set `VITE_WIREBOX_PROXY_URL` to a proxy endpoint that accepts a `url` query parameter and returns the remote page, or configure the same endpoint from WireBox Settings. Public fallback routes are provided for convenience and may be unavailable or subject to third-party policies.
 
 ## 🧪 Developer Checks
 

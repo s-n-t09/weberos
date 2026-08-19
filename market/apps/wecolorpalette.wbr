@@ -1,0 +1,21 @@
+{
+  "id": "wecolorpalette",
+  "name": "WeColor Palette",
+  "icon": "Palette",
+  "author": "S.N.T",
+  "version": "1.0.0",
+  "permissions": [],
+  "code": [
+    "return function WeColorPalette() {",
+    "  const [color, setColor] = React.useState('#6366f1');",
+    "  const [copied, setCopied] = React.useState(false);",
+    "  const copy = async () => { try { await navigator.clipboard.writeText(color); setCopied(true); setTimeout(() => setCopied(false), 1200); } catch (e) {} };",
+    "  return React.createElement('div', {className: 'h-full flex flex-col items-center justify-center gap-5 bg-slate-950 text-white p-8'},",
+    "    React.createElement('h1', {className: 'text-2xl font-bold'}, 'WeColor Palette'),",
+    "    React.createElement('input', {type: 'color', value: color, onChange: event => setColor(event.target.value), className: 'w-40 h-40 rounded-3xl cursor-pointer border-0'}),",
+    "    React.createElement('div', {className: 'flex items-center gap-2 bg-white/10 rounded-xl px-4 py-3'}, React.createElement('span', {className: 'font-mono text-lg'}, color), React.createElement('button', {onClick: copy, className: 'px-3 py-1 rounded-lg bg-indigo-500 hover:bg-indigo-400'}, copied ? 'Copied' : 'Copy')),",
+    "    React.createElement('div', {className: 'text-sm text-slate-400'}, 'Pick a color and copy its HEX value anywhere.')",
+    "  );",
+    "}"
+  ]
+}
