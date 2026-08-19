@@ -1,13 +1,49 @@
 import React, { useState, useEffect, useRef, useMemo, Component } from 'react';
 import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight, MapPin, MoreVertical, Search, CloudSun, RefreshCw, ShieldAlert, Camera, Mic, Bell } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
+import { normalizeManifest, normalizePermission } from '../utils/manifest';
+import { resolvePath, cloneFileSystem } from '../utils/fs';
+import { USER_HOME_PATH } from '../utils/constants';
+
+const evaluateExpression = (expression: string): number => {
+    const tokens = expression.match(/\d*\.?\d+|[+\-*/]/g);
+    if (!tokens || tokens.join('') !== expression.replace(/\s+/g, '')) throw new Error('Invalid expression');
+    let index = 0;
+    const parseFactor = (): number => {
+        if (tokens[index] === '-') {
+            index += 1;
+            return -parseFactor();
+        }
+        const value = Number(tokens[index++]);
+        if (!Number.isFinite(value)) throw new Error('Invalid number');
+        return value;
+    };
+    const parseTerm = (): number => {
+        let value = parseFactor();
+        while (tokens[index] === '*' || tokens[index] === '/') {
+            const operator = tokens[index++];
+            const right = parseFactor();
+            if (operator === '/' && right === 0) throw new Error('Cannot divide by zero');
+            value = operator === '*' ? value * right : value / right;
+        }
+        return value;
+    };
+    let value = parseTerm();
+    while (tokens[index] === '+' || tokens[index] === '-') {
+        const operator = tokens[index++];
+        const right = parseTerm();
+        value = operator === '+' ? value + right : value - right;
+    }
+    if (index !== tokens.length || !Number.isFinite(value)) throw new Error('Invalid expression');
+    return value;
+};
 
 export const CalcoApp = ({ user }: any) => {
     const [display, setDisplay] = useState('0');
     const [equation, setEquation] = useState('');
     const handleBtn = (val: string) => {
         if (val === 'C') { setDisplay('0'); setEquation(''); } 
-        else if (val === '=') { try { setDisplay(String(eval(equation + display))); setEquation(''); } catch { setDisplay('Error'); } } 
+        else if (val === '=') { try { setDisplay(String(evaluateExpression(equation + display))); setEquation(''); } catch { setDisplay('Error'); } }
         else if (['+', '-', '*', '/'].includes(val)) { setEquation(equation + display + val); setDisplay('0'); } 
         else setDisplay(display === '0' ? val : display + val);
     };
@@ -148,9 +184,17 @@ class ErrorBoundary extends React.Component<{children: React.ReactNode, key?: an
 
 export const DynamicAppRuntime = ({ app, user, onNotify, fs, setFs, openFilePicker, openFileSaver }: { app: any, user: any, onNotify: any, fs?: any, setFs?: any, openFilePicker?: any, openFileSaver?: any }) => {
     const [error, setError] = useState<any>(null);
+    const runtimeManifest = useMemo(() => {
+        try {
+            return normalizeManifest(app);
+        } catch (manifestError) {
+            return { error: manifestError instanceof Error ? manifestError.message : 'Invalid app manifest.' };
+        }
+    }, [app]);
 
     const checkPermission = (perm: string) => {
-        return (app.permissions || []).includes(perm);
+        if ('error' in runtimeManifest) return false;
+        return runtimeManifest.permissions.some(value => normalizePermission(value) === normalizePermission(perm));
     };
 
     const Sys = {
@@ -172,45 +216,29 @@ export const DynamicAppRuntime = ({ app, user, onNotify, fs, setFs, openFilePick
         },
         fs: {
             readFile: (path: string) => {
-                if (!checkPermission('fs')) throw new Error("Permission 'fs' not declared in app manifest.");
+                if (!checkPermission('filesystem')) throw new Error("Permission 'filesystem' not declared in app manifest.");
                 if (!fs) throw new Error("File system not available.");
-                const parts = path.split('/').filter(Boolean);
-                let current = fs;
-                for (const p of parts) {
-                    if (current.children && current.children[p]) {
-                        current = current.children[p];
-                    } else {
-                        throw new Error(`File not found: ${path}`);
-                    }
-                }
-                if (current.type !== 'file') throw new Error(`Not a file: ${path}`);
-                return current.content;
+                const { node } = resolvePath(fs, USER_HOME_PATH, path);
+                if (!node || node.type !== 'file') throw new Error(`File not found: ${path}`);
+                return node.content || '';
             },
             writeFile: (path: string, content: string) => {
-                if (!checkPermission('fs')) throw new Error("Permission 'fs' not declared in app manifest.");
+                if (!checkPermission('filesystem')) throw new Error("Permission 'filesystem' not declared in app manifest.");
                 if (!fs || !setFs) throw new Error("File system not available.");
-                const parts = path.split('/').filter(Boolean);
-                const fileName = parts.pop();
-                if (!fileName) throw new Error("Invalid path");
-                let current = fs;
-                for (const p of parts) {
-                    if (current.children && current.children[p]) {
-                        current = current.children[p];
-                    } else {
-                        throw new Error(`Directory not found: ${parts.join('/')}`);
-                    }
-                }
-                if (current.type !== 'dir' || !current.children) throw new Error(`Not a directory: ${parts.join('/')}`);
-                current.children[fileName] = { type: 'file', content };
-                setFs({ ...fs });
+                const next = cloneFileSystem(fs);
+                const { parent, name } = resolvePath(next, USER_HOME_PATH, path);
+                if (!parent || parent.type !== 'dir') throw new Error(`Directory not found: ${path}`);
+                parent.children = parent.children || {};
+                parent.children[name] = { type: 'file', content };
+                setFs(next);
             },
             openFilePicker: () => {
-                if (!checkPermission('fs')) throw new Error("Permission 'fs' not declared in app manifest.");
+                if (!checkPermission('filesystem')) throw new Error("Permission 'filesystem' not declared in app manifest.");
                 if (!openFilePicker) throw new Error("File picker not available.");
                 return new Promise(resolve => openFilePicker(resolve));
             },
             openFileSaver: () => {
-                if (!checkPermission('fs')) throw new Error("Permission 'fs' not declared in app manifest.");
+                if (!checkPermission('filesystem')) throw new Error("Permission 'filesystem' not declared in app manifest.");
                 if (!openFileSaver) throw new Error("File saver not available.");
                 return new Promise(resolve => openFileSaver(resolve));
             }
@@ -219,7 +247,8 @@ export const DynamicAppRuntime = ({ app, user, onNotify, fs, setFs, openFilePick
 
     const Component = useMemo(() => {
         try {
-            const codeString = Array.isArray(app.code) ? app.code.join('\n') : app.code;
+            if ('error' in runtimeManifest) throw new Error(runtimeManifest.error);
+            const codeString = Array.isArray(runtimeManifest.code) ? runtimeManifest.code.join('\n') : runtimeManifest.code;
             const func = new Function('React', 'LucideIcons', 'Sys', codeString);
             const res = func(React, LucideIcons, Sys);
             if (typeof res === 'function') {
@@ -235,7 +264,17 @@ export const DynamicAppRuntime = ({ app, user, onNotify, fs, setFs, openFilePick
                 </div>
             );
         }
-    }, [app.code]);
+    }, [runtimeManifest]);
+
+    if ('error' in runtimeManifest) {
+        return (
+            <div className="h-full p-6 flex flex-col items-center justify-center bg-red-950 text-red-200">
+                <ShieldAlert size={48} className="mb-4" />
+                <h2 className="text-xl font-bold mb-2">Invalid App Manifest</h2>
+                <p className="text-sm text-center max-w-md">{runtimeManifest.error}</p>
+            </div>
+        );
+    }
 
     if (error) {
         return (

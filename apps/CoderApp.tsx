@@ -87,7 +87,7 @@ export const CoderApp = ({ fs, setFs, launchData }: any) => {
     
     // WeGroq State
     const [isGroqOpen, setIsGroqOpen] = useState(false);
-    const [groqKey, setGroqKey] = useState(() => localStorage.getItem('wegroq_key') || '');
+    const [groqKey, setGroqKey] = useState(() => sessionStorage.getItem('wegroq_key') || '');
     const [groqModel, setGroqModel] = useState(() => localStorage.getItem('wegroq_model') || 'openai/gpt-oss-120b');
     const [groqMessages, setGroqMessages] = useState<{role: string, content: string}[]>([]);
     const [groqInput, setGroqInput] = useState('');
@@ -116,7 +116,8 @@ export const CoderApp = ({ fs, setFs, launchData }: any) => {
     }, [groqMessages]);
 
     const saveGroqSettings = () => {
-        localStorage.setItem('wegroq_key', groqKey);
+        if (groqKey) sessionStorage.setItem('wegroq_key', groqKey);
+        else sessionStorage.removeItem('wegroq_key');
         localStorage.setItem('wegroq_model', groqModel);
         setShowGroqSettings(false);
     };
@@ -346,7 +347,7 @@ Example .wbr structure:
   "id": "my-app",
   "name": "My App",
   "icon": "Box",
-  "permissions": ["notifications", "fs", "camera", "microphone", "geolocation"],
+  "permissions": ["notifications", "filesystem", "camera", "microphone", "geolocation"],
   "code": [
     "return function MyApp({ onNotify, fs }) {",
     "  return React.createElement('div', null, 'Hello World');",
@@ -368,7 +369,7 @@ ${content}`}
 
 Available permissions and APIs (passed as props or via Sys object):
 - "notifications": Allows sending OS notifications via \`onNotify(appId, title, message)\` or \`Sys.notify(title, message)\`.
-- "fs": Allows reading/writing files via \`Sys.fs.readFile(path)\`, \`Sys.fs.writeFile(path, content)\`, \`Sys.fs.openFilePicker()\`, \`Sys.fs.openFileSaver()\`.
+- "filesystem": Allows reading/writing files via \`Sys.fs.readFile(path)\`, \`Sys.fs.writeFile(path, content)\`, \`Sys.fs.openFilePicker()\`, \`Sys.fs.openFileSaver()\`.
 - "camera": Allows requesting camera via \`Sys.requestCamera()\`.
 - "microphone": Allows requesting microphone via \`Sys.requestMic()\`.
 - "geolocation": Allows getting location via \`Sys.getLocation()\`.
@@ -662,7 +663,7 @@ You can help the user write code, debug, or explain concepts.
                         </div>
                         <div className="flex flex-col gap-1">
                             <label className="text-xs text-gray-400">Permissions (comma separated)</label>
-                            <input className="bg-[#1e1e1e] border border-[#3e3e42] p-2 rounded outline-none focus:border-blue-500" placeholder="fs, notifications" value={weberAppInfo.permissions} onChange={e => setWeberAppInfo({...weberAppInfo, permissions: e.target.value})} />
+                            <input className="bg-[#1e1e1e] border border-[#3e3e42] p-2 rounded outline-none focus:border-blue-500" placeholder="filesystem, notifications" value={weberAppInfo.permissions} onChange={e => setWeberAppInfo({...weberAppInfo, permissions: e.target.value})} />
                         </div>
                         <div className="flex justify-end gap-2 mt-2">
                             <button className="px-4 py-2 bg-[#3e3e42] hover:bg-[#2d2d2d] rounded" onClick={() => setShowWeberModal(false)}>Cancel</button>

@@ -36,6 +36,7 @@ export const WireBoxApp = ({ user, setUser, openApp }: { user: UserProfile, setU
     const [activeTabId, setActiveTabId] = useState('1');
     const [urlInput, setUrlInput] = useState('');
     const [downloads, setDownloads] = useState<DownloadItem[]>([]);
+    const iframeRef = useRef<HTMLIFrameElement>(null);
     
     const [menuView, setMenuView] = useState<'main' | 'downloads' | 'extensions' | 'media_grabber' | 'settings' | null>(null);
 
@@ -224,10 +225,12 @@ export const WireBoxApp = ({ user, setUser, openApp }: { user: UserProfile, setU
     // Listen for messages from iframe (redirection handling)
     useEffect(() => {
         const handleMessage = (e: MessageEvent) => {
-            if (e.data.type === 'WIREBOX_NAV') {
+            if (e.source !== iframeRef.current?.contentWindow) return;
+            if (!e.data || typeof e.data !== 'object' || typeof e.data.type !== 'string') return;
+            if (e.data.type === 'WIREBOX_NAV' && typeof e.data.url === 'string' && typeof e.data.tabId === 'string') {
                 handleNavigateRef.current(e.data.url, e.data.tabId);
-            } else if (e.data.type === 'WIREBOX_MEDIA') {
-                updateTabRef.current(e.data.tabId, { media: e.data.media });
+            } else if (e.data.type === 'WIREBOX_MEDIA' && typeof e.data.tabId === 'string' && Array.isArray(e.data.media)) {
+                updateTabRef.current(e.data.tabId, { media: e.data.media.filter((item: unknown): item is { type: string; src: string } => Boolean(item && typeof item === 'object' && typeof (item as { type?: unknown }).type === 'string' && typeof (item as { src?: unknown }).src === 'string')) });
             }
         };
         window.addEventListener('message', handleMessage);
@@ -609,8 +612,11 @@ export const WireBoxApp = ({ user, setUser, openApp }: { user: UserProfile, setU
                     </div>
                 ) : (
                     <iframe 
+                        ref={iframeRef}
                         src={activeTab.srcDoc ? undefined : activeTab.url}
                         srcDoc={activeTab.srcDoc}
+                        sandbox="allow-scripts allow-forms allow-popups"
+                        referrerPolicy="no-referrer"
                         className="w-full h-full border-none"
                         title="WireBox View"
                     />

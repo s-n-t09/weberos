@@ -51,6 +51,16 @@ export const DialogHost = () => {
     };
   }, []);
 
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      const activeDialog = dialogs[dialogs.length - 1];
+      if (activeDialog) handleClose(activeDialog.id, activeDialog.type === 'prompt' ? null : false);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [dialogs]);
+
   const handleClose = (id: string, result: boolean | string | null) => {
     setDialogs(prev => {
       const dialog = prev.find(d => d.id === id);
@@ -68,15 +78,18 @@ export const DialogHost = () => {
       {dialogs.map((dialog, index) => (
         <div 
           key={dialog.id} 
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={`dialog-title-${dialog.id}`}
           className="bg-slate-900 border border-white/10 shadow-2xl rounded-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200"
           style={{ display: index === dialogs.length - 1 ? 'block' : 'none' }}
         >
           <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 bg-white/5">
             <div className="flex items-center gap-2 text-white font-medium">
               {dialog.type === 'confirm' ? <AlertTriangle size={18} className="text-yellow-500" /> : <Info size={18} className="text-blue-500" />}
-              {dialog.title || (dialog.type === 'confirm' ? 'Confirm' : dialog.type === 'prompt' ? 'Prompt' : 'Alert')}
+              <span id={`dialog-title-${dialog.id}`}>{dialog.title || (dialog.type === 'confirm' ? 'Confirm' : dialog.type === 'prompt' ? 'Prompt' : 'Alert')}</span>
             </div>
-            <button onClick={() => handleClose(dialog.id, dialog.type === 'prompt' ? null : false)} className="text-slate-400 hover:text-white transition-colors">
+            <button aria-label="Close dialog" onClick={() => handleClose(dialog.id, dialog.type === 'prompt' ? null : false)} className="text-slate-400 hover:text-white transition-colors">
               <X size={18} />
             </button>
           </div>
@@ -87,6 +100,7 @@ export const DialogHost = () => {
                     type="text"
                     value={promptValue}
                     onChange={(e) => setPromptValue(e.target.value)}
+                    aria-label={dialog.title || 'Input'}
                     className="w-full mt-4 px-3 py-2 bg-black/30 border border-white/10 rounded-lg text-white focus:outline-none focus:border-blue-500 transition-colors"
                     autoFocus
                     onKeyDown={(e) => {

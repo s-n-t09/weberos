@@ -3,73 +3,22 @@ import { Download, LayoutGrid, Code, Image as ImageIcon, Gamepad2, Cpu, Package,
 import * as LucideIcons from 'lucide-react';
 import { UserProfile } from '../types';
 import { osAlert } from '../components/DialogHost';
+import { loadMarketApps, loadWbrManifest, MarketApp as MarketCatalogApp } from '../utils/market';
+import { manifestToCustomApp } from '../utils/manifest';
 
 export const MarketApp = ({ user, setUser, onNotify }: { user: UserProfile, setUser: (u: UserProfile) => void, onNotify?: (appId: string, title: string, message: string) => void }) => {
     const [activeCategory, setActiveCategory] = useState('All');
-    const [marketApps, setMarketApps] = useState<any[]>([]);
+    const [marketApps, setMarketApps] = useState<MarketCatalogApp[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
     const categories = ['All', 'Programming', 'Media', 'Games', 'Tools', 'Other'];
 
     useEffect(() => {
-        const loadMarketData = async () => {
-            const colors: Record<string, string> = {
-                'Programming': 'bg-indigo-500',
-                'Media': 'bg-pink-500',
-                'Games': 'bg-orange-500',
-                'Tools': 'bg-emerald-500',
-                'Other': 'bg-yellow-500'
-            };
-
-            let allApps: any[] = [];
-            
-            try {
-                const categoryModules = import.meta.glob('/market/*.json', { eager: true });
-                const wbrModules = import.meta.glob('/market/apps/*.wbr', { query: '?raw', import: 'default' });
-                
-                for (const [path, module] of Object.entries(categoryModules)) {
-                    const catName = path.split('/').pop()?.replace('.json', '');
-                    const cat = catName ? catName.charAt(0).toUpperCase() + catName.slice(1) : 'Other';
-                    
-                    const apps = (module as any).default || module;
-                    if (Array.isArray(apps)) {
-                        const appsWithMeta = await Promise.all(apps.map(async app => {
-                            let version = app.version;
-                            if (!version && app.location) {
-                                try {
-                                    const wbrPath = app.location.startsWith('/') ? app.location : `/${app.location}`;
-                                    if (wbrModules[wbrPath]) {
-                                        const rawData = await wbrModules[wbrPath]();
-                                        const wbrData = JSON.parse(rawData as string);
-                                        if (wbrData.version) version = wbrData.version;
-                                    } else {
-                                        const res = await fetch(wbrPath);
-                                        if (res.ok) {
-                                            const wbrData = await res.json();
-                                            if (wbrData.version) version = wbrData.version;
-                                        }
-                                    }
-                                } catch (e) {
-                                    console.error(`Failed to fetch version for ${app.id}`, e);
-                                }
-                            }
-                            return {
-                                ...app,
-                                version,
-                                category: cat,
-                                color: colors[cat] || 'bg-slate-500'
-                            };
-                        }));
-                        allApps = [...allApps, ...appsWithMeta];
-                    }
-                }
-            } catch (e) {
-                console.error('Failed to load market data', e);
-            }
-            
-            setMarketApps(allApps);
-        };
-
-        loadMarketData();
+        loadMarketApps()
+            .then(setMarketApps)
+            .catch(error => {
+                console.error('Failed to load market data', error);
+                setMarketApps([]);
+            });
     }, []);
 
     const filteredApps = marketApps.filter(app => {
@@ -79,7 +28,7 @@ export const MarketApp = ({ user, setUser, onNotify }: { user: UserProfile, setU
         return matchesCategory && matchesSearch;
     });
 
-    const handleInstall = async (app: any) => {
+    const handleInstall = async (app: MarketCatalogApp) => {
         const isInstalled = user.installedPackages.includes(app.id);
         const existingApp = user.customApps[app.id];
         const isUpgrade = isInstalled && existingApp?.version && app.version && existingApp.version !== app.version;
@@ -89,42 +38,24 @@ export const MarketApp = ({ user, setUser, onNotify }: { user: UserProfile, setU
             return;
         }
 
-        let code = app.code;
-        let permissions = app.permissions || [];
-        let version = app.version;
-
-        if (!code && app.location) {
-            try {
-                const wbrModules = import.meta.glob('/market/apps/*.wbr', { query: '?raw', import: 'default' });
-                const wbrPath = app.location.startsWith('/') ? app.location : `/${app.location}`;
-                
-                if (wbrModules[wbrPath]) {
-                    const rawData = await wbrModules[wbrPath]();
-                    const wbrData = JSON.parse(rawData as string);
-                    code = wbrData.code;
-                    if (wbrData.permissions) permissions = wbrData.permissions;
-                    if (wbrData.version) version = wbrData.version;
-                } else {
-                    const fetchUrl = wbrPath;
-                    const res = await fetch(fetchUrl);
-                    if (!res.ok) throw new Error('Failed to download app code');
-                    const wbrData = await res.json();
-                    code = wbrData.code;
-                    if (wbrData.permissions) {
-                        permissions = wbrData.permissions;
-                    }
-                    if (wbrData.version) {
-                        version = wbrData.version;
-                    }
-                }
-            } catch (e) {
-                console.error(e);
-                await osAlert(`Failed to download ${app.name}`);
-                return;
-            }
+        let manifest;
+        try {
+            manifest = app.location ? await loadWbrManifest(app.location) : {
+                id: app.id,
+                name: app.name,
+                icon: app.icon,
+                version: app.version || '1.0.0',
+                permissions: app.permissions || [],
+                code: app.code || ''
+            };
+        } catch (error) {
+            console.error(error);
+            await osAlert(`Failed to download ${app.name}`);
+            return;
         }
 
-        const newCustomApps = { ...user.customApps, [app.id]: { id: app.id, name: app.name, iconName: app.icon, version: version, code: code, permissions: permissions, location: app.location }};
+        const installedApp = manifestToCustomApp(manifest);
+        const newCustomApps = { ...user.customApps, [app.id]: installedApp };
         const newPkgs = isInstalled ? user.installedPackages : [...user.installedPackages, app.id];
         setUser({...user, installedPackages: newPkgs, customApps: newCustomApps});
         if (onNotify) onNotify('market', isUpgrade ? 'App Upgraded' : 'App Installed', `${app.name} ${isUpgrade ? 'upgraded' : 'installed'} successfully!`);

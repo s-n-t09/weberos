@@ -107,9 +107,9 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ win, isActive, onClose
           {win.title}
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={(e) => { e.stopPropagation(); onMinimize(); }} className={`p-1 rounded transition-colors hover:bg-slate-700 text-slate-400 hover:text-white`}><Minus size={14} /></button>
-          <button onClick={(e) => { e.stopPropagation(); onMaximize(); }} className={`p-1 rounded transition-colors hover:bg-slate-700 text-slate-400 hover:text-white`}><Square size={12} /></button>
-          <button onClick={(e) => { e.stopPropagation(); onClose(); }} className={`p-1 rounded transition-colors hover:bg-red-600 text-slate-400 hover:text-white`}><X size={14} /></button>
+          <button aria-label={`Minimize ${win.title}`} title="Minimize" onClick={(e) => { e.stopPropagation(); onMinimize(); }} className={`p-1 rounded transition-colors hover:bg-slate-700 text-slate-400 hover:text-white`}><Minus size={14} /></button>
+          <button aria-label={`${win.isMaximized ? 'Restore' : 'Maximize'} ${win.title}`} title={win.isMaximized ? 'Restore' : 'Maximize'} onClick={(e) => { e.stopPropagation(); onMaximize(); }} className={`p-1 rounded transition-colors hover:bg-slate-700 text-slate-400 hover:text-white`}><Square size={12} /></button>
+          <button aria-label={`Close ${win.title}`} title="Close" onClick={(e) => { e.stopPropagation(); onClose(); }} className={`p-1 rounded transition-colors hover:bg-red-600 text-slate-400 hover:text-white`}><X size={14} /></button>
         </div>
       </div>
       <div className={`flex-1 overflow-hidden relative flex flex-col transition-colors bg-slate-900/50`}>

@@ -44,6 +44,9 @@ import { OpenWithDialog } from './components/OpenWithDialog';
 import { DialogHost, osAlert } from './components/DialogHost';
 import { DesktopIcon } from './components/DesktopIcon';
 import { playClick, playLogin, playLogout, playNotification } from './utils/sounds';
+import { createPasswordRecord, verifyPasswordRecord } from './utils/auth';
+import { readStorageJson, writeStorageJson } from './utils/storage';
+import { loadMarketApps } from './utils/market';
 
 import { TerminalApp } from './apps/TerminalApp';
 import { ExplorerApp } from './apps/ExplorerApp';
@@ -59,6 +62,12 @@ import { GamesApp } from './apps/GamesApp';
 import { InstallerApp } from './apps/InstallerApp';
 import { NotifTesterApp } from './apps/NotifTesterApp';
 import { TaskManagerApp } from './apps/TaskManagerApp';
+
+type StoredUser = UserProfile & {
+  password?: string;
+  passwordHash?: { salt: string; hash: string };
+};
+type UserDatabase = Record<string, StoredUser>;
 
 // Registry
 const SYSTEM_REGISTRY: Record<string, { name: string, icon: any, color: string }> = {
@@ -187,7 +196,7 @@ const WeberOS = () => {
   }, []);
 
   useEffect(() => {
-      const db = JSON.parse(localStorage.getItem('weberos_users') || '{}');
+      const db = readStorageJson<UserDatabase>('weberos_users', {});
       setUsersList(Object.values(db));
   }, [user]);
 
@@ -199,16 +208,16 @@ const WeberOS = () => {
   const setUser = (newUser: UserProfile | null) => {
       setUserState(newUser);
       if (newUser) {
-          const db = JSON.parse(localStorage.getItem('weberos_users') || '{}');
+          const db = readStorageJson<UserDatabase>('weberos_users', {});
           db[newUser.username] = { ...db[newUser.username], ...newUser };
-          localStorage.setItem('weberos_users', JSON.stringify(db));
+          writeStorageJson('weberos_users', db);
       }
   };
 
   const deleteUser = (usernameToDelete: string) => {
-      const db = JSON.parse(localStorage.getItem('weberos_users') || '{}');
+      const db = readStorageJson<UserDatabase>('weberos_users', {});
       delete db[usernameToDelete];
-      localStorage.setItem('weberos_users', JSON.stringify(db));
+      writeStorageJson('weberos_users', db);
       setUsersList(Object.values(db));
       
       if (user && user.username === usernameToDelete) {
@@ -241,12 +250,26 @@ const WeberOS = () => {
       if (user) setUser({ ...user, fs: newFs });
   }
 
-  const handleLogin = () => {
+    const handleLogin = async () => {
     if (!selectedProfile) return;
-    const db = JSON.parse(localStorage.getItem('weberos_users') || '{}');
+    const db = readStorageJson<UserDatabase>('weberos_users', {});
     const storedUser = db[selectedProfile.username];
+    let validPassword = false;
 
-    if (storedUser && (storedUser.password === passwordInput || !storedUser.password)) {
+    if (storedUser?.passwordHash) {
+        validPassword = await verifyPasswordRecord(passwordInput, storedUser.passwordHash);
+    } else {
+        // Backward compatibility for v2.4 profiles; migrate after a successful login.
+        validPassword = storedUser && (storedUser.password === passwordInput || !storedUser.password);
+        if (validPassword && storedUser.password) {
+            storedUser.passwordHash = await createPasswordRecord(passwordInput);
+            delete storedUser.password;
+            db[selectedProfile.username] = storedUser;
+            writeStorageJson('weberos_users', db);
+        }
+    }
+
+    if (storedUser && validPassword) {
         playLogin();
         const safeUser: UserProfile = {
             username: storedUser.username,
@@ -268,13 +291,11 @@ const WeberOS = () => {
         osAlert('Invalid password');
     }
   };
-
-  const handleCreateProfile = () => {
-      const db = JSON.parse(localStorage.getItem('weberos_users') || '{}');
-      
-      const newUser: UserProfile & {password: string} = { 
+  const handleCreateProfile = async () => {
+      const db = readStorageJson<UserDatabase>('weberos_users', {});
+      const newUser: UserProfile & {passwordHash: { salt: string; hash: string }} = {
           username: usernameInput, 
-          password: passwordInput, 
+          passwordHash: await createPasswordRecord(passwordInput),
           installedPackages: [], 
           customApps: {}, 
           fs: DEFAULT_FS,
@@ -286,10 +307,8 @@ const WeberOS = () => {
               defaultApps: {}
           }
       };
-      
       db[usernameInput] = newUser;
-      localStorage.setItem('weberos_users', JSON.stringify(db));
-      
+      writeStorageJson('weberos_users', db);
       setUsersList(Object.values(db));
       setCreateMode(false);
       setCreateStep(1);
@@ -300,7 +319,7 @@ const WeberOS = () => {
   const handleNextStep = () => {
       if (createStep === 1) {
           if (!usernameInput) return;
-          const db = JSON.parse(localStorage.getItem('weberos_users') || '{}');
+          const db = readStorageJson<UserDatabase>('weberos_users', {});
           if (db[usernameInput]) {
               osAlert('User already exists');
               return;
@@ -342,55 +361,14 @@ const WeberOS = () => {
         setHasCheckedUpgrades(true);
         const checkUpgrades = async () => {
             try {
-                const categoryModules = import.meta.glob('/market/*.json', { eager: true });
-                let allMarketApps: any[] = [];
-                for (const [path, module] of Object.entries(categoryModules)) {
-                    const apps = (module as any).default || module;
-                    if (Array.isArray(apps)) {
-                        allMarketApps = [...allMarketApps, ...apps];
-                    }
-                }
-                
-                let upgradesFound = 0;
-                const wbrModules = import.meta.glob('/market/apps/*.wbr', { query: '?raw', import: 'default' });
-                
-                for (const installedId of user.installedPackages) {
-                    const customApp = user.customApps[installedId];
-                    if (!customApp) continue;
+                const marketApps = await loadMarketApps();
+                const currentVersions = new Map(marketApps.map(app => [app.id, app.version]));
+                const upgradesFound = user.installedPackages.reduce((count, installedId) => {
+                    const installed = user.customApps[installedId];
+                    const latest = currentVersions.get(installedId);
+                    return installed?.version && latest && latest !== installed.version ? count + 1 : count;
+                }, 0);
 
-                    let latestVersion = null;
-                    const marketApp = allMarketApps.find(a => a.id === installedId);
-                    if (marketApp && marketApp.version) {
-                        latestVersion = marketApp.version;
-                    }
-
-                    const locationToCheck = customApp.location || (marketApp && marketApp.location);
-
-                    if (locationToCheck) {
-                        try {
-                            const wbrPath = locationToCheck.startsWith('/') ? locationToCheck : `/${locationToCheck}`;
-                            
-                            if (wbrModules[wbrPath]) {
-                                const rawData = await wbrModules[wbrPath]();
-                                const wbrData = JSON.parse(rawData as string);
-                                if (wbrData.version) latestVersion = wbrData.version;
-                            } else {
-                                const res = await fetch(wbrPath);
-                                if (res.ok) {
-                                    const wbrData = await res.json();
-                                    if (wbrData.version) latestVersion = wbrData.version;
-                                }
-                            }
-                        } catch (e) {
-                            console.error(`Failed to check upgrade for ${installedId}`, e);
-                        }
-                    }
-
-                    if (latestVersion && customApp.version && latestVersion !== customApp.version) {
-                        upgradesFound++;
-                    }
-                }
-                
                 if (upgradesFound > 0) {
                     setTimeout(() => {
                         sendNotification('market', 'App Updates Available', `You have ${upgradesFound} app update(s) available in the Market.`);

@@ -10,6 +10,18 @@ export default defineConfig(({ mode }) => {
         allowedHosts: true
       },
       plugins: [react()],
+      build: {
+        rollupOptions: {
+          output: {
+            manualChunks(id) {
+              if (id.includes('node_modules')) return 'vendor';
+              if (id.includes('/apps/')) return 'apps';
+              if (id.includes('/components/')) return 'components';
+            }
+          }
+        },
+        chunkSizeWarningLimit: 700
+      },
       resolve: {
         alias: {
           '@': path.resolve('.'),

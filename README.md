@@ -188,7 +188,7 @@ To publish your app to the WeberOS Market:
 
 ## 🛡️ API Permissions
 
-You can request system permissions in your `.wbr` manifest to access advanced features.
+You can request system permissions in your `.wbr` manifest to access advanced features. WeberOS 2.5 validates manifests before installation and accepts the legacy `fs` name by normalizing it to `filesystem`. Apps should use `filesystem` in new manifests.
 
 | Permission | Description | API Access |
 | :--- | :--- | :--- |
@@ -196,6 +196,7 @@ You can request system permissions in your `.wbr` manifest to access advanced fe
 | `camera` | Access the user's camera | `Sys.requestCamera()` |
 | `microphone` | Access the user's microphone | `Sys.requestMic()` |
 | `geolocation` | Access real-time location | `Sys.getLocation()` |
+| `filesystem` | Read and write files inside the user home directory | `Sys.fs.*` |
 
 **Example with permissions:**
 ```json
@@ -204,12 +205,24 @@ You can request system permissions in your `.wbr` manifest to access advanced fe
   "name": "Secure App",
   "icon": "Shield",
   "version": "1.0.0",
-  "permissions": ["notifications", "camera"],
+  "permissions": ["notifications", "camera", "filesystem"],
   "code": "return () => React.createElement('button', { onClick: () => Sys.notify('Hello', 'Permission granted!') }, 'Notify Me')"
 }
 ```
 
 ---
+
+## 🧪 Developer Checks
+
+Run the following commands before submitting changes:
+
+```bash
+npm run lint
+npm test
+npm run build
+```
+
+The runtime validates `.wbr` manifests, and file APIs are restricted to the user's virtual home directory. Do not install untrusted `.wbr` packages; Weber Runtime code is intended for trusted packages distributed through the WeberOS Market.
 
 ## 📄 License
 
