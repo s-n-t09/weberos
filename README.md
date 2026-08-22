@@ -216,7 +216,7 @@ You can request system permissions in your `.wbr` manifest to access advanced fe
 
 ## 🌐 WireBox CORS Proxy
 
-WireBox first attempts a direct request, then tries the configured custom proxy, followed by public fallback routes. For reliable production use, set `VITE_WIREBOX_PROXY_URL` to a proxy endpoint that accepts a `url` query parameter and returns the remote page, or configure the same endpoint from WireBox Settings. Public fallback routes are provided for convenience and may be unavailable or subject to third-party policies.
+WireBox first attempts a direct request, then tries the configured custom proxy, followed by the verified Jina Reader fallback. For reliable production use, set `VITE_WIREBOX_PROXY_URL` to a proxy endpoint that accepts a `url` query parameter and returns the remote HTML, or configure the same endpoint from WireBox Settings. The Jina fallback returns readable page content and is rendered as safe HTML rather than raw code. Third-party routes may be unavailable or subject to their own policies.
 
 ## 🧪 Developer Checks
 

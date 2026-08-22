@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { ArrowLeft, ArrowRight, RotateCcw, Search, Plus, X, Globe, Settings, Download, Shield, ExternalLink, Home, Menu, Terminal, Video, FileText, Palette } from 'lucide-react';
 import { UserProfile, FileSystemNode } from '../types';
 import { osConfirm } from '../components/DialogHost';
-import { fetchRemotePage } from '../utils/corsProxy';
+import { fetchRemotePage, renderReaderMarkdown } from '../utils/corsProxy';
 
 interface Tab {
     id: string;
@@ -121,7 +121,7 @@ export const WireBoxApp = ({ user, setUser, openApp }: { user: UserProfile, setU
                 let { content, provider, isDocument } = await fetchRemotePage(finalUrl, undefined, browserSettings.proxyUrl);
                 if (content) {
                      if (!isDocument) {
-                         updateTab(targetTabId, { loading: false, title: `${displayTitle} (${provider})`, srcDoc: `<pre style="white-space:pre-wrap;padding:2rem;font-family:system-ui;">${content.replace(/[&<>]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[char] || char))}</pre>` });
+                         updateTab(targetTabId, { loading: false, title: `${displayTitle} (${provider})`, srcDoc: renderReaderMarkdown(content, displayTitle) });
                          return;
                      }
                      const baseTag = `<base href="${finalUrl}" target="_self" />`;
